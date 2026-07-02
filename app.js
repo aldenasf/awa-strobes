@@ -25,7 +25,15 @@ let config = {
     pwmMin: DEFAULT_PWM_MIN,
     pwmMax: DEFAULT_PWM_MAX,
     indicatorOffAtMin: false,
-    backgroundDimPWM: 0, // new global setting
+    backgroundDimPWM: 0,
+    defaultPattern: {
+        backgroundDim: false,
+        phases: {
+            in: { type: "none", duration: 0 },
+            anim: { type: "none", amount: 0, duration: 0 },
+            out: { type: "steady", duration: 500 },
+        },
+    },
 };
 let appMode = "edit";
 let showSteps = true;
@@ -118,7 +126,6 @@ function migratePattern(p) {
         delete p.flicker;
         delete p.fade;
     }
-    // ensure backgroundDim exists
     if (p.backgroundDim === undefined) p.backgroundDim = false;
     return p;
 }
@@ -171,7 +178,7 @@ function migrateConfigToPWM(cfg) {
 }
 
 // ==========================================================================
-// CONFIG DEFAULTS (PWM range, indicator behaviour, background dim)
+// CONFIG DEFAULTS (PWM range, indicator behaviour, background dim, default pattern)
 // ==========================================================================
 function ensureConfigDefaults() {
     if (config.pwmMin === undefined) config.pwmMin = DEFAULT_PWM_MIN;
@@ -194,6 +201,27 @@ function ensureConfigDefaults() {
             if (item.backgroundDim === undefined) item.backgroundDim = false;
         }
     });
+    // ensure defaultPattern exists
+    if (!config.defaultPattern) {
+        config.defaultPattern = {
+            backgroundDim: false,
+            phases: {
+                in: { type: "none", duration: 0 },
+                anim: { type: "none", amount: 0, duration: 0 },
+                out: { type: "steady", duration: 500 },
+            },
+        };
+    }
+    // ensure defaultPattern.phases exist
+    if (!config.defaultPattern.phases) {
+        config.defaultPattern.phases = {
+            in: { type: "none", duration: 0 },
+            anim: { type: "none", amount: 0, duration: 0 },
+            out: { type: "steady", duration: 500 },
+        };
+    }
+    if (config.defaultPattern.backgroundDim === undefined)
+        config.defaultPattern.backgroundDim = false;
 }
 
 function isChannelOn(val) {
@@ -1664,16 +1692,30 @@ function resetInspectorChannelToUnchanged(si) {
     }
 }
 
-function toggleBackgroundDim() {
-    if (!activePath) return;
-    let p = getObjByPath(activePath);
+function toggleBackgroundDim(target = null) {
+    // If target is null, we are editing the default pattern
+    if (target === null) {
+        // Toggle default pattern's backgroundDim
+        config.defaultPattern.backgroundDim =
+            !config.defaultPattern.backgroundDim;
+        updateJsonPanel();
+        renderInspector();
+        // No preview update needed because default doesn't affect live preview
+        showToast(
+            `Default Background Dim ${config.defaultPattern.backgroundDim ? "enabled" : "disabled"}`,
+            "info",
+        );
+        return;
+    }
+    // Otherwise, toggle on the given pattern (path)
+    let p = getObjByPath(target);
     if (!p || p.type === "group") return;
     p.backgroundDim = !p.backgroundDim;
     updateJsonPanel();
     renderTable();
     renderInspector();
     if (!isPlaying) {
-        const bgDim = getBackgroundDimForPath(activePath);
+        const bgDim = getBackgroundDimForPath(target);
         renderLights(p.state, 0, bgDim);
     }
     showToast(
@@ -1682,14 +1724,120 @@ function toggleBackgroundDim() {
     );
 }
 
+// Helper to update a phase property on the default pattern
+function updateDefaultPhase(phase, key, value, refreshInspector = false) {
+    const dp = config.defaultPattern;
+    if (key === "type") {
+        dp.phases[phase].type = value;
+        if (value !== "none" && !dp.phases[phase].duration)
+            dp.phases[phase].duration = 500;
+        if (value === "flicker" && !dp.phases[phase].amount)
+            dp.phases[phase].amount = 3;
+    } else {
+        dp.phases[phase][key] = parseInt(value) || 0;
+    }
+    updateJsonPanel();
+    if (refreshInspector) renderInspector();
+}
+
+// Helper to render the default pattern inspector (when no pattern selected)
+function renderDefaultInspector() {
+    const container = document.getElementById("inspector-content");
+    const dp = config.defaultPattern;
+
+    let effectiveInType = dp.phases.in.type;
+    let effectiveAnimType = dp.phases.anim.type;
+    let effectiveOutType = dp.phases.out.type;
+
+    let bgDimHtml = `
+                <div class="inspector-section" style="margin-top: 12px;">
+                    <div class="inspector-label">Background Dim</div>
+                    <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
+                        <input type="checkbox" ${dp.backgroundDim ? "checked" : ""} onchange="toggleBackgroundDim(null)">
+                        Enabled
+                    </label>
+                    <div style="font-size: 10px; color: #666; margin-top: 4px;">
+                        Global PWM: ${config.backgroundDimPWM || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
+                    </div>
+                </div>
+            `;
+
+    container.innerHTML = `
+                <div style="margin-bottom: 15px; padding: 8px 12px; background: #2a2a3a; border-radius: 4px; border: 1px solid var(--accent);">
+                    <span style="font-size: 12px; font-weight: bold; color: var(--accent);">Default Pattern Properties</span>
+                    <span style="font-size: 10px; color: #888; margin-left: 10px;">These settings will be applied to newly created patterns.</span>
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">1. In-Transition</div>
+                    <select class="inspector-select" onchange="updateDefaultPhase('in', 'type', this.value, true)">
+                        <option value="none" ${effectiveInType === "none" ? "selected" : ""}>None</option>
+                        <option value="fade" ${effectiveInType === "fade" ? "selected" : ""}>Fade</option>
+                        <option value="steady" ${effectiveInType === "steady" ? "selected" : ""}>Steady</option>
+                    </select>
+                    ${
+                        effectiveInType !== "none"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
+                        <input type="number" value="${dp.phases.in.duration}" oninput="updateDefaultPhase('in', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">2. Animation</div>
+                    <select class="inspector-select" onchange="updateDefaultPhase('anim', 'type', this.value, true)">
+                        <option value="none" ${effectiveAnimType === "none" ? "selected" : ""}>None</option>
+                        <option value="flicker" ${effectiveAnimType === "flicker" ? "selected" : ""}>Flicker</option>
+                    </select>
+                    ${
+                        effectiveAnimType === "flicker"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Amount:</span>
+                        <input type="number" value="${dp.phases.anim.amount || 0}" oninput="updateDefaultPhase('anim', 'amount', this.value, false)" style="width:70px;">
+                    </div>
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
+                        <input type="number" value="${dp.phases.anim.duration}" oninput="updateDefaultPhase('anim', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">3. Out-Transition</div>
+                    <select class="inspector-select" onchange="updateDefaultPhase('out', 'type', this.value, true)">
+                        <option value="none" ${effectiveOutType === "none" ? "selected" : ""}>None</option>
+                        <option value="fade" ${effectiveOutType === "fade" ? "selected" : ""}>Fade</option>
+                        <option value="steady" ${effectiveOutType === "steady" ? "selected" : ""}>Steady</option>
+                    </select>
+                    ${
+                        effectiveOutType !== "none"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
+                        <input type="number" value="${dp.phases.out.duration}" oninput="updateDefaultPhase('out', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+
+                ${bgDimHtml}
+            `;
+}
+
 function renderInspector() {
     const container = document.getElementById("inspector-content");
+    // If no active path, show default inspector
     if (!activePath) {
-        container.innerHTML =
-            '<p style="color:#555; font-size: 12px;">Select a pattern to edit...</p>';
+        renderDefaultInspector();
         return;
     }
 
+    // If active path is a group, show group properties
     if (!activePath.includes("-")) {
         let p = config.patterns[parseInt(activePath)];
         if (p && p.type === "group") {
@@ -1712,6 +1860,7 @@ function renderInspector() {
         }
     }
 
+    // Otherwise, it's a pattern (not a group)
     let p = getObjByPath(activePath);
     if (!p) return;
     if (!p.phases) p = migratePattern(p);
@@ -1835,7 +1984,7 @@ function renderInspector() {
                 <div class="inspector-section" style="margin-top: 12px;">
                     <div class="inspector-label">Background Dim</div>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" ${bgDimEnabled ? "checked" : ""} onchange="toggleBackgroundDim()">
+                        <input type="checkbox" ${bgDimEnabled ? "checked" : ""} onchange="toggleBackgroundDim('${activePath}')">
                         Enabled
                     </label>
                     <div style="font-size: 10px; color: #666; margin-top: 4px;">
@@ -2335,17 +2484,12 @@ function toggleSolo(gIdx) {
 }
 
 function addPattern() {
-    config.patterns.push({
-        state: new Array(config.channels).fill(
-            config.pwmMin || DEFAULT_PWM_MIN,
-        ),
-        backgroundDim: false,
-        phases: {
-            in: { type: "none", duration: 0 },
-            anim: { type: "none", amount: 0, duration: 0 },
-            out: { type: "steady", duration: 500 },
-        },
-    });
+    // Deep clone defaultPattern and add state array
+    const newPattern = JSON.parse(JSON.stringify(config.defaultPattern));
+    newPattern.state = new Array(config.channels).fill(
+        config.pwmMin || DEFAULT_PWM_MIN,
+    );
+    config.patterns.push(newPattern);
     renderTable();
 }
 
