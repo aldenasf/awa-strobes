@@ -2186,6 +2186,9 @@ function setPreviewMode(mode) {
     const customBtn = document.getElementById("view-custom-btn");
     const shapeCtrls = document.getElementById("custom-shape-controls");
 
+    document.getElementById("btn-reset-layout").style.display =
+        mode === "custom" ? "inline-flex" : "none";
+
     if (mode === "custom") {
         bar.style.display = "none";
         customView.style.display = "block";
@@ -2218,22 +2221,36 @@ function setPreviewMode(mode) {
 }
 
 function setCanvasItemShape(shape) {
-    if (
-        activeInspectorChannel !== -1 &&
-        canvasLayoutData[activeInspectorChannel]
-    ) {
-        canvasLayoutData[activeInspectorChannel].shape = shape;
-        localStorage.setItem(
-            `strobe_canvas_layout_v${version}`,
-            JSON.stringify(canvasLayoutData),
-        );
-        if (activePath) {
-            let currP = getObjByPath(activePath);
-            if (currP && currP.state) renderLights(currP.state, 0);
-        } else {
-            renderLights(new Array(config.channels).fill(0), 0);
+    const selectedNodes = document.querySelectorAll(
+        "#custom-layout-view .active-node-sel",
+    );
+
+    // Nothing selected -> ask to apply to all
+    if (selectedNodes.length === 0) {
+        if (
+            !confirm(
+                `No channels are selected.\n\nApply "${shape}" to all ${config.channels} indicators?`,
+            )
+        ) {
+            return;
         }
+
+        canvasLayoutData.forEach((node) => {
+            node.shape = shape;
+        });
+    } else {
+        // Apply only to selected nodes
+        selectedNodes.forEach((node) => {
+            const idx = parseInt(node.dataset.channel, 10);
+            if (canvasLayoutData[idx]) {
+                canvasLayoutData[idx].shape = shape;
+            }
+        });
     }
+
+    renderLights(
+        isPlaying ? currentLightState : new Array(config.channels).fill(0),
+    );
 }
 
 function handleCanvasNodeMouseDown(e, index) {
@@ -2277,6 +2294,35 @@ function handleCanvasNodeMouseDown(e, index) {
     window.addEventListener("mouseup", onMouseUp);
 }
 
+function resetIndicatorPositions() {
+    if (!confirm("Reset position of all indicators?")) return;
+    const cols = Math.ceil(config.channels / 2);
+    const topY = 25;
+    const bottomY = 65;
+
+    const startX = 15;
+    const endX = 79;
+
+    const step = cols > 1 ? (endX - startX) / (cols - 1) : 0;
+
+    canvasLayoutData = [];
+
+    for (let i = 0; i < config.channels; i++) {
+        const row = i < cols ? 0 : 1;
+        const col = row === 0 ? i : i - cols;
+
+        canvasLayoutData.push({
+            x: startX + col * step,
+            y: row === 0 ? topY : bottomY,
+            shape: "circle",
+        });
+    }
+
+    renderLights(
+        isPlaying ? currentLightState : new Array(config.channels).fill(0),
+    );
+    showToast("Indicator positions reset", "success");
+}
 // ==========================================================================
 // LIGHT PREVIEW RENDERING
 // Draws the current channel state onto the bar/canvas preview.
