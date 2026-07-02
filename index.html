@@ -254,13 +254,13 @@
                             onclick="setAppMode('select')"><u>S</u>ELECT</button>
                     </div>
                     <div class="toolbar-group">
-                        <span class="label-text">CHANNELS</span>
+                        <span class="label-text">CH</span>
                         <input type="number" id="global-channels" value="10"
                             onchange="updateGlobalChannels(this.value)">
                     </div>
 
                     <div class="toolbar-group">
-                        <span class="label-text">TOOL</span>
+                        <!-- <span class="label-text">TOOL</span> -->
                         <button id="tool-hybrid-btn" class="btn-compact active-hybrid" onclick="setActiveTool('hybrid')"
                             title="Hybrid Inverse Drag Mode"><img src="/assets/hybrid.svg" class="icon"></button>
                         <button id="tool-paint-btn" class="btn-compact" onclick="setActiveTool('paint')"
@@ -270,7 +270,7 @@
                     </div>
 
                     <div class="toolbar-group" id="brush-intensity-group">
-                        <span class="label-text">LEVEL</span>
+                        <img src="/assets/pwm.svg" class="icon">
                         <div class="paint-widget" id="paint-tool-scroll-box" onwheel="handleBrushWidgetWheel(event)"
                             title="Scroll wheel over box to modify level PWM value">
                             <input type="number" class="paint-widget-input" id="global-brush-val" min="0" max="1023"
@@ -308,14 +308,14 @@
                     <button id="btn-toggle-steps" title="Toggle Steps (Ctrl+T)" onclick="toggleStepIndicator()">STEPS:
                         ON</button>
                     <button title="Raw Config" onclick="toggleJsonModal()">JSON</button>
-                    <button title="Preferences" onclick="toggleSettingsModal()"><img src="/assets/settings.svg"
-                            class="icon"> SETTINGS</button>
                     <button id="open-btn" title="Open JSON File (Ctrl+O)"
                         onclick="document.getElementById('file-input').click()">OPEN</button>
+                    <button title="Preferences" onclick="toggleSettingsModal()"><img src="/assets/settings.svg"
+                            class="icon"></button>
                     <button onclick="addPattern()" title="Add Row (A)"><img src="/assets/plus.svg" class="icon">
-                        ADD</button>
+                    </button>
                     <button class="warn" onclick="clearAllPatterns()"><img src="/assets/delete.svg" class="icon">
-                        CLEAR</button>
+                    </button>
                 </div>
 
                 <div class="toolbar selection-toolbar" id="selection-toolbar">
