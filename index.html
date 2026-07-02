@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strobe Pattern Configurator</title>
+    <link rel="stylesheet" type="text/css" href="/assets/toastify.css">
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body onmouseup="globallyReleasePaintStroke()">
+
+    <div id="custom-color-popup" onclick="event.stopPropagation()">
+        <div
+            style="font-size: 9px; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">
+            Swatches</div>
+        <div class="popup-preset-grid">
+            <div class="popup-swatch" style="background-color: #e7000b;" onclick="selectCustomPopupColor('#e7000b')">
+            </div>
+            <div class="popup-swatch" style="background-color: #2b7fff;" onclick="selectCustomPopupColor('#2b7fff')">
+            </div>
+            <div class="popup-swatch" style="background-color: #1447e6;" onclick="selectCustomPopupColor('#1447e6')">
+            </div>
+            <div class="popup-swatch" style="background-color: #e17100;" onclick="selectCustomPopupColor('#e17100')">
+            </div>
+            <div class="popup-swatch" style="background-color: #ffffff;" onclick="selectCustomPopupColor('#ffffff')">
+            </div>
+        </div>
+        <label class="popup-custom-trigger">
+            <input type="color" id="hidden-native-picker"
+                style="position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;"
+                oninput="selectCustomPopupColor(this.value)">
+            CUSTOM...
+        </label>
+    </div>
+
+    <div id="help-modal" onclick="toggleHelp()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="margin:0 0 10px 0; color:var(--accent); font-size: 18px;">Keyboard Shortcuts Guide</h3>
+
+            <div class="shortcut-category">User Experience</div>
+            <div
+                style="font-size: 11px; margin-bottom: 12px; line-height: 1.4; color: #ccc; background: #222; padding: 10px; border-radius: 4px; border: 1px solid var(--border);">
+                When clicking on an ON light state, if the current level % is the same from the clicked one, toggle it
+                off. But if the level % is different, keep it on but override the clicked level % with the current level
+                %.
+            </div>
+
+            <div class="shortcut-category">General Controls</div>
+            <div class="shortcut-item"><span>Toggle Play/Stop</span> <span class="key-bind">Space</span></div>
+            <div class="shortcut-item"><span>Undo Action</span> <span class="key-bind">Ctrl + Z</span></div>
+            <div class="shortcut-item"><span>Redo Action</span> <span class="key-bind">Ctrl + Y / Ctrl + Shift +
+                    Z</span></div>
+            <div class="shortcut-item"><span>Download Config (JSON)</span> <span class="key-bind">Ctrl + S</span></div>
+            <div class="shortcut-item"><span>Open Config (JSON)</span> <span class="key-bind">Ctrl + O</span></div>
+            <div class="shortcut-item"><span>Toggle Step Indicator</span> <span class="key-bind">Ctrl + T</span></div>
+            <div class="shortcut-item"><span>Show/Hide Help</span> <span class="key-bind">Shift + ?</span></div>
+            <div class="shortcut-category">App Modes</div>
+            <div class="shortcut-item"><span>Switch to EDIT Mode</span> <span class="key-bind">E</span></div>
+            <div class="shortcut-item"><span>Switch to SELECT Mode</span> <span class="key-bind">S</span></div>
+            <div class="shortcut-category">Input & Row Navigation</div>
+            <div class="shortcut-item"><span>Navigate Rows Focus</span> <span class="key-bind">↑ / ↓ Arrows</span></div>
+            <div class="shortcut-item"><span>Move Selected Row Up/Down</span> <span class="key-bind">Ctrl + ↑ / ↓
+                    Arrows</span></div>
+            <div class="shortcut-category">Editing & Shifts</div>
+            <div class="shortcut-item"><span>Shift Selection Left</span> <span class="key-bind">Ctrl + &lt;</span></div>
+            <div class="shortcut-item"><span>Shift Selection Right</span> <span class="key-bind">Ctrl + &gt;</span>
+            </div>
+            <div class="shortcut-item"><span>Add New Standalone Pattern</span> <span class="key-bind">A</span></div>
+            <div class="shortcut-item"><span>Duplicate Row/Group</span> <span class="key-bind">Ctrl + D</span></div>
+            <div class="shortcut-item"><span>Mirror Pattern Horizontal</span> <span class="key-bind">Ctrl + M</span>
+            </div>
+            <div class="shortcut-item"><span>Invert Row</span> <span class="key-bind">Ctrl + I</span></div>
+            <div class="shortcut-item"><span>Delete Row</span> <span class="key-bind">Del</span></div>
+            <div class="shortcut-category">Select Mode Logic</div>
+            <div class="shortcut-item"><span>Group Selected Rows</span> <span class="key-bind">Ctrl + G</span></div>
+            <div class="shortcut-item"><span>Ungroup Active Group</span> <span class="key-bind">Ctrl + Shift + G</span>
+            </div>
+            <div class="shortcut-item"><span>Reverse Selection Order</span> <span class="key-bind">Ctrl + R</span></div>
+            <div class="shortcut-item"><span>Select All Patterns</span> <span class="key-bind">Ctrl + A</span></div>
+            <div class="shortcut-item"><span>Clear Selection</span> <span class="key-bind">Esc</span></div>
+            <div style="text-align:right; margin-top:20px"><button onclick="toggleHelp()">CLOSE</button></div>
+        </div>
+    </div>
+
+    <div id="json-modal" onclick="toggleJsonModal()">
+        <div class="modal-content" style="max-width: 800px; display:flex; flex-direction:column; height: 80vh;"
+            onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                <h3 style="margin:0; color:var(--accent); font-size: 18px; text-transform: uppercase;">Live Config Data
+                </h3>
+                <div style="display:flex; gap:10px;">
+                    <button class="open-json-btn" onclick="document.getElementById('file-input').click()"
+                        title="Open JSON File (Ctrl+O)">OPEN</button>
+                    <button class="copy-json-btn" onclick="copyToClipboard()" title="Copy to Clipboard">COPY</button>
+                    <button onclick="toggleJsonModal()">CLOSE</button>
+                </div>
+            </div>
+            <input type="file" id="file-input" accept=".json" style="display: none;" onchange="handleFileInput(event)">
+            <textarea id="json-input" spellcheck="false" oninput="handleManualJsonEdit(this.value)"
+                style="flex:1; width:100%; background: #111; color: #a5d6ff; font-family: 'Consolas', monospace; font-size: 11px; padding: 15px; border: 1px solid var(--border); border-radius: 6px; resize: none; outline: none; line-height: 1.4; box-sizing:border-box;"></textarea>
+        </div>
+    </div>
+
+    <div id="settings-modal" onclick="toggleSettingsModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3
+                style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Preferences & Settings</h3>
+
+            <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
+                <div class="inspector-label" style="color: var(--text);">Paint Tool Configuration</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                    <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (%):</span>
+                    <input type="number" id="settings-brush-increment" min="1" max="100" step="1" value="10"
+                        oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 25px;">
+                <button onclick="toggleSettingsModal()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sticky-top">
+        <div class="visualizer-header">
+            <div id="light-bar"></div>
+            <div id="custom-layout-view" style="display: none;"></div>
+
+            <div class="preview-tools">
+                <div
+                    style="display: flex; background: #222; border: 1px solid var(--border); border-radius: 4px; padding: 2px;">
+                    <button id="view-bar-btn" style="background: var(--accent); padding: 3px 8px; font-size: 10px;"
+                        onclick="setPreviewMode('bar')">LINEAR BAR</button>
+                    <button id="view-custom-btn" style="background: transparent; padding: 3px 8px; font-size: 10px;"
+                        onclick="setPreviewMode('custom')">FREE FORM</button>
+                </div>
+
+                <div id="custom-shape-controls"
+                    style="display: none; align-items: center; gap: 6px; background: #1a1a1a; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">
+                    <span class="label-text" style="font-size: 9px; color: #aaa;">CH <span
+                            id="shape-control-ch-num">-</span> SHAPE:</span>
+                    <select id="canvas-item-shape" onchange="setCanvasItemShape(this.value)"
+                        style="background:#252525; color:white; border:1px solid #444; font-size:10px; padding:2px; border-radius:3px; outline:none; cursor:pointer;">
+                        <option value="circle">Circle</option>
+                        <option value="square">Square</option>
+                        <option value="rectangle">Rectangle</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="h-resizer" id="h-resizer" title="Drag to resize / Double-click to reset"></div>
+
+        <div style="padding: 0 20px;">
+            <div class="toolbar-container">
+                <div class="toolbar">
+                    <div class="toolbar-group">
+                        <button id="btn-edit-mode" title="Edit Mode (E)" class="active-mode"
+                            onclick="setAppMode('edit')"><u>E</u>DIT</button>
+                        <button id="btn-select-mode" title="Select Mode (S)"
+                            onclick="setAppMode('select')"><u>S</u>ELECT</button>
+                    </div>
+                    <div class="toolbar-group">
+                        <span class="label-text">CHANNELS</span>
+                        <input type="number" id="global-channels" value="10"
+                            onchange="updateGlobalChannels(this.value)">
+                    </div>
+
+                    <div class="toolbar-group">
+                        <span class="label-text">TOOL</span>
+                        <button id="tool-hybrid-btn" class="btn-compact active-hybrid" onclick="setActiveTool('hybrid')"
+                            title="Hybrid Inverse Drag Mode"><img src="/assets/hybrid.svg" class="icon"></button>
+                        <button id="tool-paint-btn" class="btn-compact" onclick="setActiveTool('paint')"
+                            title="Paint Brush Tool"><img src="/assets/brush.svg" class="icon"></button>
+                        <button id="tool-erase-btn" class="btn-compact" onclick="setActiveTool('erase')"
+                            title="Eraser Tool"><img src="/assets/eraser.svg" class="icon"></button>
+                    </div>
+
+                    <div class="toolbar-group" id="brush-intensity-group">
+                        <span class="label-text">LEVEL</span>
+                        <div class="paint-widget" id="paint-tool-scroll-box" onwheel="handleBrushWidgetWheel(event)"
+                            title="Scroll wheel over box to modify level brightness percentage">
+                            <input type="number" class="paint-widget-input" id="global-brush-val" min="0" max="100"
+                                step="1" value="75" oninput="handleManualBrushInput(this.value)">
+                            <span
+                                style="font-size:11px; font-weight:bold; color:white; margin-left:-2px; text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); pointer-events: none;">%</span>
+                        </div>
+                        <div class="brush-dropdown-container" id="brush-presets-dropdown-wrapper">
+                            <button class="btn-compact" style="padding:4px 8px; font-weight:bold;"
+                                onclick="toggleBrushPresetsMenu(event)" title="Brush Presets">...</button>
+                            <div class="brush-popover" id="brush-presets-popup">
+                                <button onclick="selectBrushPreset(0.10)">10% Level</button>
+                                <button onclick="selectBrushPreset(0.25)">25% Level</button>
+                                <button onclick="selectBrushPreset(0.50)">50% Level</button>
+                                <button onclick="selectBrushPreset(0.75)">75% Level</button>
+                                <button onclick="selectBrushPreset(1.00)">100% Level</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-group">
+                        <button id="main-playback-btn" class="play-btn" title="Toggle Playback (Space)"
+                            onclick="togglePlayback()">
+                            <img src="/assets/play.svg" class="icon" id="playback-icon"
+                                onerror="this.style.display='none'"> <span id="playback-text">PLAY</span>
+                        </button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button id="btn-undo" class="btn-compact" title="Undo (Ctrl+Z)" onclick="undoState()"
+                            disabled><img src="/assets/undo.svg" class="icon"></button>
+                        <button id="btn-redo" class="btn-compact" title="Redo (Ctrl+Y)" onclick="redoState()"
+                            disabled><img src="/assets/redo.svg" class="icon"></button>
+                    </div>
+                    <div style="flex-grow: 1"></div>
+
+                    <div
+                        style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: bold; color: #888; white-space: nowrap; margin-right: 12px; user-select: none; -webkit-user-select: none;">
+                        <span id="ws-status" style="color:red; font-size:16px; line-height: 1;">⬤</span> SYNC
+                    </div>
+
+                    <button id="btn-toggle-steps" title="Toggle Steps (Ctrl+T)" onclick="toggleStepIndicator()">STEPS:
+                        ON</button>
+                    <button title="Raw Config" onclick="toggleJsonModal()">JSON</button>
+                    <button title="Preferences" onclick="toggleSettingsModal()"><img src="/assets/settings.svg"
+                            class="icon"> SETTINGS</button>
+                    <button id="open-btn" title="Open JSON File (Ctrl+O)"
+                        onclick="document.getElementById('file-input').click()">OPEN</button>
+                    <button onclick="addPattern()" title="Add Row (A)"><img src="/assets/plus.svg" class="icon">
+                        ADD</button>
+                    <button class="warn" onclick="clearAllPatterns()"><img src="/assets/delete.svg" class="icon">
+                        CLEAR</button>
+                </div>
+
+                <div class="toolbar selection-toolbar" id="selection-toolbar">
+                    <div class="toolbar-group">
+                        <button id="sel-all" onclick="selectAllRows()">ALL</button>
+                        <button id="sel-clear" onclick="clearSelection()" style="background: #444;">NONE</button>
+                        <button id="sel-odd" onclick="filterSelectionOddEven('odd')"
+                            style="background: #2a2a2a; border: 1px solid #555;">ODD</button>
+                        <button id="sel-even" onclick="filterSelectionOddEven('even')"
+                            style="background: #2a2a2a; border: 1px solid #555;">EVEN</button>
+                        <button id="sel-undo" onclick="undoSelection()" style="background: #3a2d42; color: #dcb3ff;"
+                            disabled>UNDO SEL</button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button id="sel-group" onclick="groupSelectedItems()" style="color:var(--accent)">GROUP</button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button id="sel-clone" class="btn-compact" title="Clone Selection (Ctrl+D)"
+                            onclick="duplicateSelected()"><img src="/assets/duplicate.svg" class="icon"></button>
+                        <button id="sel-reverse" class="btn-compact" title="Reverse Play Order (Ctrl+R)"
+                            onclick="reverseSelectedOrder()"><img src="/assets/reverse-order.svg" class="icon"></button>
+                        <button id="sel-invert" class="btn-compact" onclick="invertSelected()"><img
+                                src="/assets/invert.svg" class="icon"></button>
+                        <button id="sel-mirror" class="btn-compact" onclick="mirrorSelected()"><img
+                                src="/assets/mirror.svg" class="icon"></button>
+                        <button id="sel-left" class="btn-compact" onclick="shiftSelected('left')"><img
+                                src="/assets/shift-left.svg" class="icon"></button>
+                        <button id="sel-right" class="btn-compact" onclick="shiftSelected('right')"><img
+                                src="/assets/shift-right.svg" class="icon"></button>
+                    </div>
+                    <div style="flex-grow: 1"></div>
+                    <button id="sel-delete" class="warn" onclick="deleteSelected()"><img src="/assets/delete.svg"
+                            class="icon"> <span id="del-count-text"></span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" onclick="handleEmptyClick(event)">
+        <div class="editor-side show-steps" id="editor-container" onclick="handleEmptyClick(event)">
+            <table id="main-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;"></th>
+                        <th style="width: auto;">State Configuration</th>
+                        <th style="width: 160px;">Timeline Summary</th>
+                        <th style="width: 220px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="pattern-list"></tbody>
+            </table>
+        </div>
+
+        <div class="v-resizer" id="v-resizer" title="Drag to resize / Double-click to reset"></div>
+
+        <div id="inspector-panel" onclick="event.stopPropagation()">
+            <h3 style="margin:0 0 15px 0; color:var(--text); font-size: 14px; text-transform:uppercase;">Inspector</h3>
+            <div id="inspector-content">
+                <p style="color:#555; font-size: 12px;">Select a pattern to edit...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="/assets/toastify.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

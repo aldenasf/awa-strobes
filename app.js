@@ -1,0 +1,2652 @@
+// ============================================================================
+// STROBE PATTERN CONFIGURATOR
+// ----------------------------------------------------------------------------
+// This file drives the whole editor UI: the pattern table, the inspector
+// panel, the live preview (bar / custom canvas layouts), undo/redo, the
+// paint tool, and syncing the config to a physical ESP32 strobe controller
+// over WebSocket. Jump to the section banners below (search for "// ====")
+// to find a specific area of functionality.
+// ============================================================================
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+
+let config = {
+    _strobe_editor_version: "1",
+    channels: 10,
+    patterns: [],
+    colors: [],
+};
+let appMode = "edit";
+let showSteps = true;
+let selectedPaths = new Set();
+let isDraggingSelection = false;
+let dragTargetState = null;
+let isPlaying = false;
+let abortController = null;
+let activePath = null;
+let soloGroupIdx = null;
+let activeInspectorChannel = 0;
+
+// Custom Color Picker Application Context States
+let currentPickerContext = null;
+
+// Selection History Tracking Stack
+let selectionHistoryStack = [];
+
+// Preview Mode & Custom Canvas Layout Configuration Properties
+let previewMode = "bar";
+let canvasLayoutData = [];
+let draggedChannelIdx = null;
+
+// Painting Tools Dynamic State Settings
+let activeTool = "hybrid";
+let brushBrightness = 1;
+let brushIncrement = 0.1;
+let isPaintingActive = false;
+let nodesToggledInCurrentStroke = new Set();
+
+let inspectorBuffer = null;
+let dirtyFields = new Set();
+
+let historyStack = JSON.parse(localStorage.getItem("strobe_history_v5")) || [];
+let historyIndex =
+    localStorage.getItem("strobe_history_index_v5") !== null
+        ? parseInt(localStorage.getItem("strobe_history_index_v5"))
+        : -1;
+const MAX_HISTORY = 50;
+let isUndoRedoAction = false;
+
+// ==========================================================================
+// TOAST NOTIFICATIONS
+// Small popup messages shown to the user (via Toastify).
+// ==========================================================================
+function showToast(msg, type = "info") {
+    let color = "linear-gradient(to right, #007bff, #0056b3)";
+    if (type === "history") color = "#cc9a05";
+    if (type === "success") color = "#28a745";
+    if (type === "warn") color = "#dc3545";
+    Toastify({
+        text: msg,
+        duration: 2000,
+        gravity: "top",
+        position: "right",
+        stopOnFocus: true,
+        style: { background: color, color: "#ffffff" },
+    }).showToast();
+}
+
+// ==========================================================================
+// CONFIG DATA MIGRATION
+// Upgrades patterns saved by older versions of the editor to the current shape.
+// ==========================================================================
+function migratePattern(p) {
+    if (!p.phases) {
+        let dur = p.duration || 500;
+        let hasFlicker = p.flicker && p.flicker.amount > 0;
+        p.phases = {
+            in:
+                p.fade && p.fade.in > 0
+                    ? { type: "fade", duration: p.fade.in }
+                    : { type: "none", duration: 0 },
+            anim: hasFlicker
+                ? {
+                      type: "flicker",
+                      amount: p.flicker.amount,
+                      duration: p.flicker.duration || dur,
+                  }
+                : { type: "none", duration: 0, amount: 0 },
+            out:
+                p.fade && p.fade.out > 0
+                    ? { type: "fade", duration: p.fade.out }
+                    : hasFlicker
+                      ? { type: "none", duration: 0 }
+                      : { type: "steady", duration: dur },
+        };
+        delete p.duration;
+        delete p.flicker;
+        delete p.fade;
+    }
+    return p;
+}
+
+// ==========================================================================
+// UNDO / REDO HISTORY (CONFIG)
+// Tracks snapshots of the whole `config` object so edits can be undone/redone.
+// ==========================================================================
+function saveHistoryToLocal() {
+    localStorage.setItem("strobe_history_v5", JSON.stringify(historyStack));
+    localStorage.setItem("strobe_history_index_v5", historyIndex.toString());
+}
+
+function saveState(jsonString) {
+    if (historyIndex < historyStack.length - 1)
+        historyStack = historyStack.slice(0, historyIndex + 1);
+    historyStack.push(jsonString);
+    if (historyStack.length > MAX_HISTORY) historyStack.shift();
+    else historyIndex++;
+    updateUndoRedoButtons();
+    saveHistoryToLocal();
+}
+
+function undoState() {
+    if (historyIndex > 0) {
+        isUndoRedoAction = true;
+        historyIndex--;
+        applyHistoryState();
+        showToast("Undid action", "history");
+    }
+    updateUndoRedoButtons();
+    saveHistoryToLocal();
+}
+
+function redoState() {
+    if (historyIndex < historyStack.length - 1) {
+        isUndoRedoAction = true;
+        historyIndex++;
+        applyHistoryState();
+        showToast("Redid action", "history");
+    }
+    updateUndoRedoButtons();
+    saveHistoryToLocal();
+}
+
+function applyHistoryState() {
+    config = JSON.parse(historyStack[historyIndex]);
+    if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+    if (!config.colors) config.colors = [];
+    while (config.colors.length < config.channels)
+        config.colors.push("#ff2a2a");
+    syncCanvasLayoutLength();
+    document.getElementById("light-bar").innerHTML = "";
+    document.getElementById("custom-layout-view").innerHTML = "";
+    renderLights(new Array(config.channels).fill(0));
+    document.getElementById("global-channels").value = config.channels;
+    renderTable();
+    renderInspector();
+    isUndoRedoAction = false;
+    updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+    const u = document.getElementById("btn-undo"),
+        r = document.getElementById("btn-redo");
+    if (u) u.disabled = historyIndex <= 0;
+    if (r) r.disabled = historyIndex >= historyStack.length - 1;
+}
+
+// ==========================================================================
+// SELECTION & CLICK HANDLING
+// Generic clicks on empty space / setting the 'active' row.
+// ==========================================================================
+function handleEmptyClick(e) {
+    const isDeadSpace =
+        e.target.classList.contains("app-container") ||
+        e.target.contains(document.getElementById("custom-layout-view")) ||
+        e.target.classList.contains("editor-side") ||
+        e.target.tagName.toLowerCase() === "table" ||
+        e.target.tagName.toLowerCase() === "thead";
+    if (isDeadSpace) {
+        activePath = null;
+        selectedPaths.clear();
+        inspectorBuffer = null;
+        dirtyFields.clear();
+        renderTable();
+        renderInspector();
+    }
+}
+
+function setActivePath(path) {
+    activePath = path;
+    if (selectedPaths.size === 0) {
+        inspectorBuffer = null;
+        dirtyFields.clear();
+    }
+    renderTable();
+    renderInspector();
+}
+
+// ==========================================================================
+// SELECTION HISTORY (UNDO SELECTION)
+// Separate undo stack just for row-selection changes.
+// ==========================================================================
+function saveSelectionState() {
+    selectionHistoryStack.push(new Set(selectedPaths));
+    if (selectionHistoryStack.length > 50) selectionHistoryStack.shift();
+    updateSelectionUndoButton();
+}
+
+function undoSelection() {
+    if (selectionHistoryStack.length === 0) return;
+    selectedPaths = selectionHistoryStack.pop();
+    renderTableSelection();
+    updateSelectionUndoButton();
+    showToast("Selection restored");
+}
+
+function updateSelectionUndoButton() {
+    const btn = document.getElementById("sel-undo");
+    if (btn) btn.disabled = selectionHistoryStack.length === 0;
+}
+
+function filterSelectionOddEven(type) {
+    if (selectedPaths.size === 0) return;
+    saveSelectionState();
+    const allVisualPaths = Array.from(
+        document.querySelectorAll("#pattern-list tr"),
+    )
+        .map((tr) => tr.dataset.path)
+        .filter(Boolean);
+    const sortedSelected = allVisualPaths.filter((path) =>
+        selectedPaths.has(path),
+    );
+    selectedPaths.clear();
+    sortedSelected.forEach((path, idx) => {
+        if (type === "odd" && idx % 2 === 0) selectedPaths.add(path);
+        else if (type === "even" && idx % 2 !== 0) selectedPaths.add(path);
+    });
+    renderTableSelection();
+}
+
+// ==========================================================================
+// CUSTOM COLOR PICKER POPUP
+// ==========================================================================
+function openCustomColorPopup(e, context) {
+    e.stopPropagation();
+    currentPickerContext = context;
+    const popup = document.getElementById("custom-color-popup");
+
+    const hiddenPicker = document.getElementById("hidden-native-picker");
+    if (typeof context === "number") {
+        hiddenPicker.value = config.colors[context] || "#ff2a2a";
+    }
+
+    const rect = e.target.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    popup.style.left = `${Math.min(window.innerWidth - 170, rect.left + window.scrollX)}px`;
+    popup.style.display = "flex";
+}
+
+function selectCustomPopupColor(val) {
+    if (!val) return;
+    if (typeof currentPickerContext === "number") {
+        config.colors[currentPickerContext] = val;
+        updateJsonPanel();
+        renderTable();
+        renderInspector();
+        if (!isPlaying) {
+            if (activePath) {
+                let currP = getObjByPath(activePath);
+                if (currP && currP.state) renderLights(currP.state, 0);
+            } else {
+                renderLights(new Array(config.channels).fill(0), 0);
+            }
+        }
+    }
+}
+
+// ==========================================================================
+// HELP MODAL
+// ==========================================================================
+function toggleHelp() {
+    const m = document.getElementById("help-modal");
+    m.style.display = m.style.display === "flex" ? "none" : "flex";
+}
+
+document.addEventListener("click", () => {
+    document.getElementById("custom-color-popup").style.display = "none";
+});
+
+// ==========================================================================
+// ROW REORDERING & KEYBOARD SHORTCUTS
+// Arrow-key row moves, plus the global keydown handler for all hotkeys.
+// ==========================================================================
+function moveActiveRow(dir) {
+    if (!activePath) return;
+    const isChild = activePath.includes("-");
+    if (isChild) {
+        let [gIdx, pIdx] = activePath.split("-").map(Number);
+        let group = config.patterns[gIdx];
+        if (!group || group.type !== "group") return;
+        let arr = group.patterns;
+        let nextPIdx = dir === "up" ? pIdx - 1 : pIdx + 1;
+        if (nextPIdx < 0 || nextPIdx >= arr.length) return;
+
+        let temp = arr[pIdx];
+        arr[pIdx] = arr[nextPIdx];
+        arr[nextPIdx] = temp;
+        activePath = `${gIdx}-${nextPIdx}`;
+    } else {
+        let gIdx = parseInt(activePath);
+        let arr = config.patterns;
+        let nextGIdx = dir === "up" ? gIdx - 1 : gIdx + 1;
+        if (nextGIdx < 0 || nextGIdx >= arr.length) return;
+
+        let temp = arr[gIdx];
+        arr[gIdx] = arr[nextGIdx];
+        arr[nextGIdx] = temp;
+        activePath = `${nextGIdx}`;
+
+        if (soloGroupIdx === gIdx) soloGroupIdx = nextGIdx;
+        else if (soloGroupIdx === nextGIdx) soloGroupIdx = gIdx;
+    }
+    updateJsonPanel();
+    renderTable();
+    renderInspector();
+    showToast(`Moved active item ${dir}`);
+}
+
+window.addEventListener("keydown", (e) => {
+    if (
+        e.target.tagName.toLowerCase() === "input" ||
+        e.target.tagName.toLowerCase() === "textarea" ||
+        e.target.tagName.toLowerCase() === "select"
+    )
+        return;
+    const isCtrl = e.ctrlKey || e.metaKey;
+
+    if (isCtrl && !e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undoState();
+        return;
+    }
+    if (isCtrl && e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        redoState();
+        return;
+    }
+    if (isCtrl && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redoState();
+        return;
+    }
+    if (isCtrl && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        document.getElementById("file-input").click();
+        return;
+    }
+    if ((e.shiftKey && e.key === "?") || e.key === "/") {
+        e.preventDefault();
+        toggleHelp();
+        return;
+    }
+    if (e.code === "Space") {
+        e.preventDefault();
+        togglePlayback();
+        return;
+    }
+
+    if (isCtrl && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        if (appMode === "select") selectAllRows();
+        return;
+    }
+
+    if (isCtrl && (e.key === "<" || e.key === ",")) {
+        e.preventDefault();
+        if (selectedPaths.size > 0) {
+            shiftSelected("left");
+        } else if (activePath) {
+            shiftPattern(activePath, "left");
+            showToast("Shifted pattern left");
+        }
+        return;
+    }
+    if (isCtrl && (e.key === ">" || e.key === ".")) {
+        e.preventDefault();
+        if (selectedPaths.size > 0) {
+            shiftSelected("right");
+        } else if (activePath) {
+            shiftPattern(activePath, "right");
+            showToast("Shifted pattern right");
+        }
+        return;
+    }
+
+    if (appMode === "edit") {
+        if (isCtrl && e.key === "ArrowUp") {
+            e.preventDefault();
+            moveActiveRow("up");
+            return;
+        }
+        if (isCtrl && e.key === "ArrowDown") {
+            e.preventDefault();
+            moveActiveRow("down");
+            return;
+        }
+
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const allRows = Array.from(
+                document.querySelectorAll("#pattern-list tr"),
+            ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+            const currentIdx = allRows.findIndex(
+                (tr) =>
+                    (tr.dataset.path || tr.dataset.groupPath) === activePath,
+            );
+            let nextIdx = e.key === "ArrowUp" ? currentIdx - 1 : currentIdx + 1;
+            if (nextIdx >= 0 && nextIdx < allRows.length) {
+                setActivePath(
+                    allRows[nextIdx].dataset.path ||
+                        allRows[nextIdx].dataset.groupPath,
+                );
+            }
+            return;
+        }
+        if (isCtrl && e.key.toLowerCase() === "d") {
+            e.preventDefault();
+            if (selectedPaths.size > 0) duplicateSelected();
+            else if (activePath) {
+                if (activePath.includes("-")) duplicateRow(activePath);
+                else duplicateGroup(parseInt(activePath));
+            }
+            return;
+        }
+        if (isCtrl && e.key.toLowerCase() === "m") {
+            e.preventDefault();
+            if (selectedPaths.size > 0) mirrorSelected();
+            else if (activePath && activePath.includes("-"))
+                mirrorPattern(activePath);
+            return;
+        }
+        if (isCtrl && e.key.toLowerCase() === "i") {
+            e.preventDefault();
+            if (selectedPaths.size > 0) invertSelected();
+            else if (activePath) {
+                if (activePath.includes("-")) invertRow(activePath);
+                else invertGroup(parseInt(activePath));
+            }
+            return;
+        }
+        if (e.key === "Delete") {
+            if (selectedPaths.size > 0) deleteSelected();
+            else if (activePath) removePattern(activePath);
+            return;
+        }
+    }
+
+    if (!isCtrl && e.key.toLowerCase() === "e") setAppMode("edit");
+    if (!isCtrl && e.key.toLowerCase() === "s") setAppMode("select");
+    if (!isCtrl && e.key.toLowerCase() === "a") addPattern();
+    if (isCtrl && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        downloadConfig();
+    }
+    if (isCtrl && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        if (appMode === "select") reverseSelectedOrder();
+    }
+    if (isCtrl && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        toggleStepIndicator();
+    }
+    if (isCtrl && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (appMode === "select") groupSelectedItems();
+    }
+    if (isCtrl && e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (activePath) {
+            let parts = activePath.split("-");
+            let gIdx = parseInt(parts[0]);
+            if (config.patterns[gIdx] && config.patterns[gIdx].type === "group")
+                ungroup(gIdx);
+        }
+    }
+    if (e.key === "Escape") {
+        if (document.getElementById("help-modal").style.display === "flex")
+            toggleHelp();
+        else if (document.getElementById("json-modal").style.display === "flex")
+            toggleJsonModal();
+        else if (
+            document.getElementById("settings-modal").style.display === "flex"
+        )
+            toggleSettingsModal();
+        else if (appMode === "select") clearSelection();
+    }
+});
+
+// ==========================================================================
+// FILE IMPORT / JSON LOADING
+// Opening a .json config file from disk.
+// ==========================================================================
+function handleFileInput(event) {
+    if (event.target.files.length > 0) loadJsonFile(event.target.files[0]);
+    event.target.value = "";
+}
+
+function loadJsonFile(file) {
+    if (
+        !file ||
+        (!file.type.includes("json") && !file.name.endsWith(".json"))
+    ) {
+        showToast("Please select a valid JSON file", "warn");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const p = JSON.parse(
+                file.name.endsWith(".json") ? e.target.result : "{}",
+            );
+            if (
+                p &&
+                typeof p.channels === "number" &&
+                Array.isArray(p.patterns)
+            ) {
+                config = p;
+                if (!config._strobe_editor_version)
+                    config._strobe_editor_version = "1";
+                if (!config.colors) config.colors = [];
+                while (config.colors.length < config.channels)
+                    config.colors.push("#ff2a2a");
+                syncCanvasLayoutLength();
+                document.getElementById("light-bar").innerHTML = "";
+                document.getElementById("custom-layout-view").innerHTML = "";
+                renderLights(new Array(config.channels).fill(0), 0);
+                document.getElementById("global-channels").value =
+                    config.channels;
+                activePath = null;
+                inspectorBuffer = null;
+                dirtyFields.clear();
+                renderTable();
+                renderInspector();
+                showToast("Config loaded successfully", "success");
+            } else showToast("Invalid config format", "warn");
+        } catch (err) {
+            showToast("Failed to parse JSON", "warn");
+        }
+    };
+    reader.readAsText(file);
+}
+
+document.addEventListener("dragover", (e) => {
+    if (
+        e.dataTransfer.types &&
+        Array.from(e.dataTransfer.types).includes("Files")
+    ) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+    }
+});
+
+document.addEventListener("drop", (e) => {
+    if (
+        e.dataTransfer.types &&
+        Array.from(e.dataTransfer.types).includes("Files")
+    ) {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0)
+            loadJsonFile(e.dataTransfer.files[0]);
+    }
+});
+
+function toggleJsonModal() {
+    const m = document.getElementById("json-modal");
+    m.style.display = m.style.display === "flex" ? "none" : "flex";
+    if (m.style.display === "flex") updateJsonPanel();
+}
+
+// ==========================================================================
+// SETTINGS MODAL
+// ==========================================================================
+function toggleSettingsModal() {
+    const m = document.getElementById("settings-modal");
+    m.style.display = m.style.display === "flex" ? "none" : "flex";
+    if (m.style.display === "flex") {
+        document.getElementById("settings-brush-increment").value = Math.round(
+            brushIncrement * 100,
+        );
+    }
+}
+
+function updateBrushIncrementSetting(val) {
+    let parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed <= 0) return;
+    brushIncrement = Math.min(100, Math.max(1, parsed)) / 100;
+}
+
+document.addEventListener("click", () => {
+    const pop = document.getElementById("brush-presets-popup");
+    if (pop) pop.style.display = "none";
+});
+
+// ==========================================================================
+// CONFIG EXPORT
+// Downloading / copying the current config as JSON.
+// ==========================================================================
+function downloadConfig() {
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "strobe_config.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Config downloaded");
+}
+
+function copyToClipboard() {
+    navigator.clipboard
+        .writeText(document.getElementById("json-input").value)
+        .then(() => {
+            showToast("JSON copied to clipboard", "success");
+        })
+        .catch((err) => {
+            document.getElementById("json-input").select();
+            document.execCommand("copy");
+            showToast("JSON copied to clipboard", "success");
+        });
+}
+
+// ==========================================================================
+// APP MODE & STEP INDICATOR
+// Switching between edit/select modes and toggling the step-number display.
+// ==========================================================================
+function setAppMode(mode) {
+    appMode = mode;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    document.getElementById("btn-edit-mode").className =
+        mode === "edit" ? "active-mode" : "";
+    document.getElementById("btn-select-mode").className =
+        mode === "select" ? "active-mode" : "";
+    document.getElementById("editor-container").className =
+        mode === "select"
+            ? "editor-side select-mode-active"
+            : "editor-side show-steps";
+    document.getElementById("selection-toolbar").style.display =
+        mode === "select" ? "flex" : "none";
+    if (mode === "edit") {
+        selectedPaths.clear();
+        selectionHistoryStack = [];
+    }
+    renderTable();
+    renderInspector();
+    if (mode === "select") updateSelectionUndoButton();
+}
+
+function toggleStepIndicator() {
+    showSteps = !showSteps;
+    document.getElementById("btn-toggle-steps").innerText = showSteps
+        ? "STEPS: ON"
+        : "STEPS: OFF";
+    if (showSteps)
+        document.getElementById("editor-container").classList.add("show-steps");
+    else
+        document
+            .getElementById("editor-container")
+            .classList.remove("show-steps");
+}
+window.onmouseup = () => {
+    isDraggingSelection = false;
+    dragTargetState = null;
+};
+
+// ==========================================================================
+// PATH HELPERS
+// Patterns are addressed by a "path" string like "2" (root pattern 2) or "2-1"
+// (pattern 1 inside group 2). These helpers resolve a path to real data.
+// ==========================================================================
+function getObjByPath(path) {
+    let [gIdx, pIdx] = path.split("-");
+    return pIdx === undefined
+        ? config.patterns[gIdx]
+        : config.patterns[gIdx].patterns[pIdx];
+}
+function getArrByPath(path) {
+    let [gIdx, pIdx] = path.split("-");
+    return pIdx === undefined
+        ? config.patterns
+        : config.patterns[gIdx].patterns;
+}
+function getIdxByPath(path) {
+    let parts = path.split("-");
+    return parseInt(parts[parts.length - 1]);
+}
+
+// ==========================================================================
+// BULK SELECTION ACTIONS
+// Select all / clear / group / ungroup multiple rows at once.
+// ==========================================================================
+function selectAllRows() {
+    if (appMode !== "select") return;
+    saveSelectionState();
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    config.patterns.forEach((item, gIdx) => {
+        if (item.type === "group")
+            item.patterns.forEach((_, pIdx) =>
+                selectedPaths.add(`${gIdx}-${pIdx}`),
+            );
+        else selectedPaths.add(`${gIdx}`);
+    });
+    renderTableSelection();
+}
+
+function clearSelection() {
+    saveSelectionState();
+    selectedPaths.clear();
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTableSelection();
+}
+
+function groupSelectedItems() {
+    let rootIndices = Array.from(selectedPaths)
+        .filter((p) => !p.includes("-"))
+        .map(Number)
+        .sort((a, b) => a - b);
+    if (rootIndices.length < 1) return;
+    let group = { type: "group", repeat: 2, patterns: [], bounce: false };
+    for (let i = rootIndices.length - 1; i >= 0; i--) {
+        let item = config.patterns.splice(rootIndices[i], 1)[0];
+        if (item.type === "group") group.patterns.unshift(...item.patterns);
+        else group.patterns.unshift(item);
+    }
+    config.patterns.splice(rootIndices[0], 0, group);
+    selectedPaths.clear();
+    activePath = null;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTable();
+    renderInspector();
+    showToast("Group created");
+}
+function ungroup(gIdx) {
+    let group = config.patterns[gIdx];
+    config.patterns.splice(gIdx, 1, ...group.patterns);
+    if (soloGroupIdx === gIdx) soloGroupIdx = null;
+    activePath = null;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTable();
+    renderInspector();
+    showToast("Group disbanded");
+}
+
+// ==========================================================================
+// CHANNEL COUNT MANAGEMENT
+// Changing how many strobe channels the config has.
+// ==========================================================================
+function updateGlobalChannels(val) {
+    let n = parseInt(val) || 1;
+    config.channels = n;
+    if (!config.colors) config.colors = [];
+    while (config.colors.length < n) config.colors.push("#ff2a2a");
+    if (config.colors.length > n) config.colors = config.colors.slice(0, n);
+    syncCanvasLayoutLength();
+    const fixLength = (p) => {
+        while (p.state.length < n) p.state.push(0);
+        if (p.state.length > n) p.state = p.state.slice(0, n);
+    };
+    config.patterns.forEach((item) => {
+        if (item.type === "group") item.patterns.forEach(fixLength);
+        else fixLength(item);
+    });
+    document.getElementById("light-bar").innerHTML = "";
+    document.getElementById("custom-layout-view").innerHTML = "";
+    renderTable();
+}
+
+// Paint, Erase, & Hybrid Tool Selection Controls
+
+// ==========================================================================
+// PAINT TOOL
+// The brush used to paint channel levels directly onto rows in the table
+// and onto nodes in the custom canvas layout.
+// ==========================================================================
+function setActiveTool(tool) {
+    background: activeTool = tool;
+
+    const hybridBtn = document.getElementById("tool-hybrid-btn");
+    const paintBtn = document.getElementById("tool-paint-btn");
+    const eraseBtn = document.getElementById("tool-erase-btn");
+
+    hybridBtn.className = "btn-compact";
+    paintBtn.className = "btn-compact";
+    eraseBtn.className = "btn-compact";
+
+    if (tool === "hybrid") hybridBtn.classList.add("active-hybrid");
+    if (tool === "paint") paintBtn.classList.add("active-paint");
+    if (tool === "erase") eraseBtn.classList.add("active-erase");
+
+    const opacityVal = tool === "erase" ? "0.3" : "1";
+    document.getElementById("paint-tool-scroll-box").style.opacity = opacityVal;
+    document.getElementById("brush-presets-dropdown-wrapper").style.opacity =
+        opacityVal;
+    syncBrushWidgetStyles();
+}
+
+function syncBrushWidgetStyles() {
+    const inputField = document.getElementById("global-brush-val");
+    if (inputField && document.activeElement !== inputField) {
+        inputField.value = Math.round(brushBrightness * 100);
+    }
+    const scrollBox = document.getElementById("paint-tool-scroll-box");
+    if (scrollBox) {
+        scrollBox.style.backgroundColor = `rgba(255, 42, 42, ${brushBrightness})`;
+    }
+}
+
+function handleBrushWidgetWheel(event) {
+    if (activeTool === "erase") return;
+    event.preventDefault();
+    let step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
+    let next = Math.min(1.0, Math.max(0.0, brushBrightness + step));
+    brushBrightness = Math.round(next * 100) / 100;
+    syncBrushWidgetStyles();
+    renderInspector();
+}
+
+function handleManualBrushInput(val) {
+    if (activeTool === "erase") return;
+    let parsed = parseFloat(val);
+    if (isNaN(parsed)) return;
+    let target = Math.min(100, Math.max(0, parsed)) / 100;
+    brushBrightness = Math.round(target * 100) / 100;
+    syncBrushWidgetStyles();
+    renderInspector();
+}
+
+function toggleBrushPresetsMenu(e) {
+    if (activeTool === "erase") return;
+    e.stopPropagation();
+    const pop = document.getElementById("brush-presets-popup");
+    pop.style.display = pop.style.display === "block" ? "none" : "block";
+}
+
+function selectBrushPreset(val) {
+    brushBrightness = val;
+    syncBrushWidgetStyles();
+    document.getElementById("brush-presets-popup").style.display = "none";
+    renderInspector();
+}
+
+// Grid Painting Drag Action Modules
+function startPaintStrokeDrag(path, si) {
+    if (appMode !== "edit") return;
+    isPaintingActive = true;
+    nodesToggledInCurrentStroke.clear();
+    paintTargetCellNode(path, si);
+}
+
+function enterPaintStrokeDrag(path, si) {
+    if (!isPaintingActive || appMode !== "edit") return;
+    paintTargetCellNode(path, si);
+}
+
+function globallyReleasePaintStroke() {
+    if (isPaintingActive) {
+        isPaintingActive = false;
+        nodesToggledInCurrentStroke.clear();
+    }
+}
+
+function paintTargetCellNode(path, si) {
+    const nodeKey = `${path}-${si}`;
+    if (nodesToggledInCurrentStroke.has(nodeKey)) return;
+
+    nodesToggledInCurrentStroke.add(nodeKey);
+    let p = getObjByPath(path);
+    if (!p) return;
+
+    if (activeTool === "paint") {
+        p.state[si] = brushBrightness;
+    } else if (activeTool === "erase") {
+        p.state[si] = 0;
+    } else if (activeTool === "hybrid") {
+        let current = parseFloat(p.state[si]) || 0;
+        if (current > 0) {
+            if (
+                Math.round(current * 100) === Math.round(brushBrightness * 100)
+            ) {
+                p.state[si] = 0;
+            } else {
+                p.state[si] = brushBrightness;
+            }
+        } else {
+            p.state[si] = brushBrightness;
+        }
+    }
+
+    renderTable();
+    if (!isPlaying) renderLights(p.state, 0);
+    updateJsonPanel();
+    if (activePath === path) {
+        const rangeInput = document.getElementById("inspector-dimmer-range");
+        const numberInput = document.getElementById("inspector-dimmer-number");
+        const labelNode = document.getElementById("inspector-dimmer-label");
+        const blockNode = document.getElementById(`inspector-ch-block-${si}`);
+
+        if (si === activeInspectorChannel) {
+            if (rangeInput && rangeInput !== document.activeElement)
+                rangeInput.value = p.state[si];
+            if (numberInput && numberInput !== document.activeElement)
+                numberInput.value = p.state[si];
+            if (labelNode)
+                labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${Math.round(p.state[si] * 100)}%)</span>`;
+        }
+        if (blockNode) {
+            blockNode.title = `${Math.round(p.state[si] * 100)}%`;
+            const chanColor = config.colors[si] || "#ff2a2a";
+            if (p.state[si] > 0) {
+                blockNode.classList.add("on");
+                blockNode.style.background = chanColor;
+                blockNode.style.opacity = 0.2 + p.state[si] * 0.8;
+            } else {
+                blockNode.classList.remove("on");
+                blockNode.style.background = "#222";
+                blockNode.style.opacity = "1";
+            }
+        }
+    }
+}
+
+// ==========================================================================
+// SELECTION SHIFT & INSPECTOR APPLY
+// Applying an inspector-panel edit to every currently selected row.
+// ==========================================================================
+function shiftSelected(dir) {
+    selectedPaths.forEach((path) => shiftPattern(path, dir, false));
+    renderTable();
+    showToast(`Shifted selection ${dir}`);
+}
+
+function applyInspectorToSelection() {
+    let hasStateChanges =
+        inspectorBuffer && inspectorBuffer.state.some((s) => s !== -1);
+    if (
+        !inspectorBuffer ||
+        selectedPaths.size === 0 ||
+        (dirtyFields.size === 0 && !hasStateChanges)
+    )
+        return;
+
+    selectedPaths.forEach((path) => {
+        let p = getObjByPath(path);
+        if (p && p.type !== "group") {
+            if (!p.phases) p = migratePattern(p);
+            dirtyFields.forEach((fieldPath) => {
+                let [phaseName, fieldKey] = fieldPath.split(".");
+                if (p.phases[phaseName]) {
+                    p.phases[phaseName][fieldKey] =
+                        inspectorBuffer.phases[phaseName][fieldKey];
+                }
+            });
+            for (let i = 0; i < config.channels; i++) {
+                if (inspectorBuffer.state[i] !== -1) {
+                    p.state[i] = inspectorBuffer.state[i];
+                }
+            }
+        }
+    });
+    dirtyFields.clear();
+    inspectorBuffer = null;
+    updateJsonPanel();
+    renderTable();
+    renderInspector();
+    showToast("Applied modified values to selection", "success");
+}
+
+// ==========================================================================
+// TABLE RENDERING
+// Building the HTML for the main pattern table.
+// ==========================================================================
+function getTimelineSummary(p) {
+    if (!p.phases) return "-";
+    let parts = [];
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+    if (p.phases.in && p.phases.in.type !== "none")
+        parts.push(
+            `<span style="color:#a5d6ff; font-weight:bold;">In:</span> ${cap(p.phases.in.type)} (${p.phases.in.duration}ms)`,
+        );
+    if (p.phases.anim && p.phases.anim.type !== "none") {
+        let amt = p.phases.anim.amount ? `x${p.phases.anim.amount}` : "";
+        parts.push(
+            `<span style="color:#ffc107; font-weight:bold;">Anim:</span> ${cap(p.phases.anim.type)} ${amt} (${p.phases.anim.duration}ms)`,
+        );
+    }
+    if (p.phases.out && p.phases.out.type !== "none")
+        parts.push(
+            `<span style="color:#28a745; font-weight:bold;">Out:</span> ${cap(p.phases.out.type)} (${p.phases.out.duration}ms)`,
+        );
+    return parts.join("<br>") || "None";
+}
+
+function createPatternRowHTML(p, path, isChild = false) {
+    if (!p.phases) p = migratePattern(p);
+    const tr = document.createElement("tr");
+    tr.dataset.path = path;
+    if (isChild) tr.className = "group-child";
+    if (selectedPaths.has(path)) tr.classList.add("selected");
+    if (activePath === path && appMode === "edit")
+        tr.classList.add("active-row");
+
+    tr.onmousedown = (e) => {
+        if (
+            e.target.closest("button") ||
+            e.target.classList.contains("block") ||
+            e.target.closest(".actions-cell") ||
+            e.target.closest("input") ||
+            e.target.closest("select")
+        ) {
+            return;
+        }
+        setActivePath(path);
+        if (appMode === "select") {
+            saveSelectionState();
+            isDraggingSelection = true;
+            if (selectedPaths.has(path)) {
+                selectedPaths.delete(path);
+                dragTargetState = "deselect";
+            } else {
+                selectedPaths.add(path);
+                dragTargetState = "select";
+            }
+            renderTableSelection();
+        }
+    };
+
+    const stateHtml = `<div class="state-blocks">${p.state
+        .map((s, si) => {
+            const val = parseFloat(s) || 0;
+            let styleStr = "";
+            const chanColor = config.colors[si] || "#ff2a2a";
+            if (val > 0) {
+                styleStr = `style="background: ${chanColor}; opacity: ${0.2 + val * 0.8};"`;
+            }
+            return `<div class="block ${val > 0 ? "on" : ""}" ${styleStr} onmousedown="event.stopPropagation(); activePath='${path}'; startPaintStrokeDrag('${path}', ${si})" onmouseenter="enterPaintStrokeDrag('${path}', ${si})" title="${Math.round(val * 100)}%"></div>`;
+        })
+        .join("")}</div>`;
+
+    const summaryHtml = `<div style="font-size: 10px; color:#aaa; white-space: normal; line-height:1.4;">${getTimelineSummary(p)}</div>`;
+
+    tr.innerHTML = `
+            <td class="drag-handle"><img src="/assets/drag-handle.svg" class="icon icon-sm"></td>
+            <td>${stateHtml}</td>
+            <td>${summaryHtml}</td>
+            <td>
+                <div class="actions-cell">
+                    <button class="btn-icon" title="Shift Left" onclick="activePath='${path}'; shiftPattern('${path}', 'left')"><img src="/assets/shift-left.svg" class="icon icon-sm"></button>
+                    <button class="btn-icon" title="Shift Right" onclick="activePath='${path}'; shiftPattern('${path}', 'right')"><img src="/assets/shift-right.svg" class="icon icon-sm"></button>
+                    <button class="btn-icon" title="Mirror" onclick="activePath='${path}'; mirrorPattern('${path}')"><img src="/assets/mirror.svg" class="icon icon-sm"></button>
+                    <button class="btn-icon" title="Invert" onclick="activePath='${path}'; invertRow('${path}')"><img src="/assets/invert.svg" class="icon icon-sm"></button>
+                    <button class="btn-icon" title="Duplicate" onclick="activePath='${path}'; duplicateRow('${path}')"><img src="/assets/duplicate.svg" class="icon icon-sm"></button>
+                    <button class="btn-icon" title="Delete" onclick="removePattern('${path}')"><img src="/assets/delete.svg" class="icon icon-sm"></button>
+                </div>
+            </td>`;
+
+    const handle = tr.querySelector(".drag-handle");
+    handle.onmouseenter = () => (tr.draggable = true);
+    handle.onmouseleave = () => {
+        if (!tr.classList.contains("dragging")) tr.draggable = false;
+    };
+    tr.onmouseup = () => {
+        tr.draggable = false;
+        tr.classList.remove("dragging");
+    };
+    tr.onmouseenter = () => {
+        if (isDraggingSelection && appMode === "select" && dragTargetState) {
+            if (dragTargetState === "select") selectedPaths.add(path);
+            else selectedPaths.delete(path);
+            renderTableSelection();
+        }
+    };
+
+    tr.ondragstart = (e) => {
+        tr.classList.add("dragging");
+        e.dataTransfer.setData("text/plain", path);
+        e.dataTransfer.effectAllowed = "move";
+    };
+    tr.ondragend = () => {
+        tr.classList.remove("dragging");
+        tr.draggable = false;
+    };
+    tr.ondragover = (e) => e.preventDefault();
+    tr.ondrop = (e) => {
+        e.preventDefault();
+        handleDrop(path, e.dataTransfer.getData("text/plain"));
+    };
+
+    return tr;
+}
+
+function renderTable(skipInspector = false) {
+    const list = document.getElementById("pattern-list");
+    list.innerHTML = "";
+    config.patterns.forEach((item, gIdx) => {
+        if (item.type === "group") {
+            const gTr = document.createElement("tr");
+            gTr.className = "group-header";
+            gTr.dataset.groupPath = `${gIdx}`;
+            if (activePath === `${gIdx}` && appMode === "edit")
+                gTr.classList.add("active-row");
+            if (soloGroupIdx === gIdx) gTr.classList.add("solo-active");
+
+            gTr.onmousedown = (e) => {
+                if (
+                    e.target.closest("button") ||
+                    e.target.closest("input") ||
+                    e.target.closest("label") ||
+                    e.target.closest(".actions-cell")
+                ) {
+                    return;
+                }
+                if (appMode === "select") {
+                    toggleGroupSelection(gIdx);
+                    setActivePath(`${gIdx}`);
+                } else {
+                    setActivePath(`${gIdx}`);
+                }
+            };
+            gTr.innerHTML = `
+                    <td class="drag-handle"><img src="/assets/drag-handle.svg" class="icon icon-sm"></td>
+                    <td colspan="2" style="padding-left:10px;">
+                        <span class="label-text" style="color:var(--accent);">PATTERN GROUP</span><span style="margin-left: 15px; font-size:10px; color:#888;">REPEAT:</span>
+                        <input type="number" class="group-repeat-input" value="${item.repeat}" onchange="updateGroupVal('${gIdx}', 'repeat', this.value, true)">
+                        <label class="bounce-toggle"><input type="checkbox" ${item.bounce ? "checked" : ""} onchange="updateGroupVal('${gIdx}', 'bounce', this.checked, true)"> BOUNCE</label>
+                    </td>
+                    <td>
+                        <div class="actions-cell">
+                             <button class="btn-icon btn-solo ${soloGroupIdx === gIdx ? "active" : ""}" onclick="toggleSolo(${gIdx})">SOLO</button>
+                             <button class="btn-icon" onclick="invertGroup(${gIdx})"><img src="/assets/invert.svg" class="icon icon-sm"></button>
+                             <button class="btn-icon" onclick="duplicateGroup(${gIdx})"><img src="/assets/duplicate.svg" class="icon icon-sm"></button>
+                             <button class="btn-icon" onclick="removePattern('${gIdx}')"><img src="/assets/delete.svg" class="icon icon-sm"></button>
+                             <button class="warn btn-compact" onclick="ungroup(${gIdx})">UNGROUP</button>
+                        </div>
+                    </td>`;
+
+            const handle = gTr.querySelector(".drag-handle");
+            handle.onmouseenter = () => (gTr.draggable = true);
+            handle.onmouseleave = () => {
+                if (!gTr.classList.contains("dragging")) gTr.draggable = false;
+            };
+            gTr.onmouseup = () => {
+                gTr.draggable = false;
+                gTr.classList.remove("dragging");
+            };
+
+            gTr.ondragstart = (e) => {
+                gTr.classList.add("dragging");
+                e.dataTransfer.setData("text/plain", `${gIdx}`);
+                e.dataTransfer.effectAllowed = "move";
+            };
+            gTr.ondragend = () => {
+                gTr.classList.remove("dragging");
+                gTr.draggable = false;
+            };
+            gTr.ondragover = (e) => e.preventDefault();
+            gTr.ondrop = (e) => {
+                e.preventDefault();
+                handleDrop(`${gIdx}`, e.dataTransfer.getData("text/plain"));
+            };
+
+            list.appendChild(gTr);
+            item.patterns.forEach((child, pIdx) =>
+                list.appendChild(
+                    createPatternRowHTML(child, `${gIdx}-${pIdx}`, true),
+                ),
+            );
+        } else list.appendChild(createPatternRowHTML(item, `${gIdx}`, false));
+    });
+    renderTableSelection(skipInspector);
+    updateJsonPanel();
+}
+
+function toggleGroupSelection(gIdx) {
+    const group = config.patterns[gIdx];
+    if (!group || group.type !== "group") return;
+    saveSelectionState();
+    const allSelected = group.patterns.every((_, pIdx) =>
+        selectedPaths.has(`${gIdx}-${pIdx}`),
+    );
+    group.patterns.forEach((_, pIdx) => {
+        if (allSelected) selectedPaths.delete(`${gIdx}-${pIdx}`);
+        else selectedPaths.add(`${gIdx}-${pIdx}`);
+    });
+    renderTableSelection();
+}
+
+// ==========================================================================
+// INSPECTOR PANEL
+// The right-hand panel used to edit the details of the active pattern.
+// ==========================================================================
+function selectInspectorChannel(si) {
+    activeInspectorChannel = si;
+    renderInspector();
+    if (previewMode === "custom") {
+        const numEl = document.getElementById("shape-control-ch-num");
+        if (numEl) numEl.innerText = si !== -1 ? si + 1 : "-";
+        const selectEl = document.getElementById("canvas-item-shape");
+        if (selectEl && si !== -1 && canvasLayoutData[si])
+            selectEl.value = canvasLayoutData[si].shape;
+
+        if (activePath) {
+            let currP = getObjByPath(activePath);
+            if (currP && currP.state) renderLights(currP.state, 0);
+        } else {
+            renderLights(new Array(config.channels).fill(0), 0);
+        }
+    }
+}
+
+function updateInspectorChannelVolume(si, val) {
+    if (si === -1) return;
+    let num = parseFloat(val);
+    if (isNaN(num)) num = 0;
+    if (num < 0) num = 0;
+    if (num > 1) num = 1;
+    num = Math.round(num * 100) / 100;
+
+    if (selectedPaths.size > 0) {
+        if (!inspectorBuffer) {
+            let p = getObjByPath(activePath);
+            if (!p.phases) p = migratePattern(p);
+            inspectorBuffer = {
+                phases: JSON.parse(JSON.stringify(p.phases)),
+                state: new Array(config.channels).fill(-1),
+            };
+        }
+        inspectorBuffer.state[si] = num;
+
+        const applyBtn = document.getElementById("btn-apply-selection");
+        if (applyBtn) {
+            applyBtn.removeAttribute("disabled");
+            applyBtn.style.cssText =
+                "width: 100%; justify-content: center; background: var(--success);";
+        }
+    } else {
+        let p = getObjByPath(activePath);
+        if (p) {
+            p.state[si] = num;
+            renderTable(true);
+            if (!isPlaying) renderLights(p.state, 0);
+            updateJsonPanel();
+        }
+    }
+
+    const labelNode = document.getElementById("inspector-dimmer-label");
+    if (labelNode) {
+        labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${Math.round(num * 100)}%)</span>`;
+    }
+
+    const rangeInput = document.getElementById("inspector-dimmer-range");
+    if (rangeInput && rangeInput !== document.activeElement) {
+        rangeInput.value = num;
+    }
+
+    const numberInput = document.getElementById("inspector-dimmer-number");
+    if (numberInput && numberInput !== document.activeElement) {
+        numberInput.value = num;
+    }
+
+    const blockNode = document.getElementById(`inspector-ch-block-${si}`);
+    if (blockNode) {
+        blockNode.title = `${Math.round(num * 100)}%`;
+        const chanColor = config.colors[si] || "#ff2a2a";
+        if (num > 0) {
+            blockNode.classList.add("on");
+            blockNode.style.background = chanColor;
+            blockNode.style.opacity = 0.2 + num * 0.8;
+        } else {
+            blockNode.classList.remove("on");
+            blockNode.style.background = "#222";
+            blockNode.style.opacity = "1";
+        }
+    }
+}
+
+function resetInspectorChannelToUnchanged(si) {
+    if (inspectorBuffer && si !== -1) {
+        inspectorBuffer.state[si] = -1;
+        renderInspector();
+    }
+}
+
+function renderInspector() {
+    const container = document.getElementById("inspector-content");
+    if (!activePath) {
+        container.innerHTML =
+            '<p style="color:#555; font-size: 12px;">Select a pattern to edit...</p>';
+        return;
+    }
+
+    if (!activePath.includes("-")) {
+        let p = config.patterns[parseInt(activePath)];
+        if (p && p.type === "group") {
+            container.innerHTML = `
+                        <div class="inspector-section">
+                            <div class="inspector-label">Group Properties</div>
+                            <div style="display:flex; flex-direction:column; gap:10px;">
+                                <label style="font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+                                    Repeat count:
+                                    <input type="number" value="${p.repeat}" oninput="updateGroupVal('${activePath}', 'repeat', this.value, false)" style="width:70px;">
+                                </label>
+                                <label style="font-size:11px; display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" ${p.bounce ? "checked" : ""} onchange="updateGroupVal('${activePath}', 'bounce', this.checked, false)">
+                                    Bounce (Reverse Play)
+                                </label>
+                            </div>
+                        </div>
+                    `;
+            return;
+        }
+    }
+
+    let p = getObjByPath(activePath);
+    if (!p) return;
+    if (!p.phases) p = migratePattern(p);
+
+    if (selectedPaths.size > 0) {
+        if (!inspectorBuffer) {
+            inspectorBuffer = {
+                phases: JSON.parse(JSON.stringify(p.phases)),
+                state: new Array(config.channels).fill(-1),
+            };
+        }
+    } else {
+        inspectorBuffer = null;
+    }
+
+    let currentPhases =
+        selectedPaths.size > 0 ? inspectorBuffer.phases : p.phases;
+
+    let effectiveInType =
+        selectedPaths.size > 0 && !dirtyFields.has("in.type")
+            ? p.phases.in.type
+            : currentPhases.in.type;
+    let effectiveAnimType =
+        selectedPaths.size > 0 && !dirtyFields.has("anim.type")
+            ? p.phases.anim.type
+            : currentPhases.anim.type;
+    let effectiveOutType =
+        selectedPaths.size > 0 && !dirtyFields.has("out.type")
+            ? p.phases.out.type
+            : currentPhases.out.type;
+
+    let stateBlocksHtml = "";
+    let currentChVal = 0;
+
+    if (selectedPaths.size > 0) {
+        currentChVal =
+            activeInspectorChannel !== -1 &&
+            inspectorBuffer.state[activeInspectorChannel] !== undefined
+                ? inspectorBuffer.state[activeInspectorChannel]
+                : -1;
+        stateBlocksHtml = inspectorBuffer.state
+            .map((s, si) => {
+                const isActive =
+                    si === activeInspectorChannel
+                        ? "outline: 2px solid var(--accent); outline-offset: 1px;"
+                        : "";
+                const chanColor = config.colors[si] || "#ff2a2a";
+                if (s === -1) {
+                    return `<div class="block" id="inspector-ch-block-${si}" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:10px; font-weight:bold; background:#222; ${isActive}" onclick="selectInspectorChannel(${si})">-</div>`;
+                } else {
+                    const val = parseFloat(s) || 0;
+                    return `<div class="block ${val > 0 ? "on" : ""}" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + val * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${Math.round(val * 100)}%"></div>`;
+                }
+            })
+            .join("");
+    } else {
+        currentChVal =
+            activeInspectorChannel !== -1 &&
+            p.state[activeInspectorChannel] !== undefined
+                ? p.state[activeInspectorChannel]
+                : 0;
+        stateBlocksHtml = p.state
+            .map((s, si) => {
+                const val = parseFloat(s) || 0;
+                const isActive =
+                    si === activeInspectorChannel
+                        ? "outline: 2px solid var(--accent); outline-offset: 1px;"
+                        : "";
+                const chanColor = config.colors[si] || "#ff2a2a";
+                if (val > 0) {
+                    return `<div class="block on" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + val * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${Math.round(val * 100)}%"></div>`;
+                } else {
+                    return `<div class="block" id="inspector-ch-block-${si}" style="background: #222; ${isActive}" onclick="selectInspectorChannel(${si})" title="0%"></div>`;
+                }
+            })
+            .join("");
+    }
+
+    let displayVal = currentChVal === -1 ? 0 : currentChVal;
+    let sliderLabelExtra =
+        activeInspectorChannel === -1
+            ? ' <span style="color:#777; font-style:italic;">(None Selected)</span>'
+            : currentChVal === -1
+              ? ' <span style="color:#777; font-style:italic;">(Unchanged)</span>'
+              : ` <span>(${Math.round(displayVal * 100)}%)</span>`;
+
+    let resetBtnHtml = "";
+    if (
+        selectedPaths.size > 0 &&
+        currentChVal !== -1 &&
+        activeInspectorChannel !== -1
+    ) {
+        resetBtnHtml = `<button class="btn-compact" style="padding: 2px 6px; font-size: 10px; background: #444; margin-left: auto;" onclick="resetInspectorChannelToUnchanged(${activeInspectorChannel})">RESET</button>`;
+    }
+
+    let dimmerControlHtml = `
+                <div style="margin-top: 14px; background: #222; padding: 10px; border-radius: 4px; border: 1px solid #333;">
+                    <div style="display:flex; align-items:center; margin-bottom: 6px;">
+                        <span id="inspector-dimmer-label" style="font-size:11px; color:#aaa; font-weight:bold;">Ch ${activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : "-"} Level:${sliderLabelExtra}</span>
+                        ${resetBtnHtml}
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="range" id="inspector-dimmer-range" min="0" max="1" step="0.05" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="flex:1; accent-color:var(--accent); cursor:pointer;">
+                        <input type="number" id="inspector-dimmer-number" min="0" max="1" step="0.01" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="width:55px; text-align:center;">
+                    </div>
+                </div>
+            `;
+
+    let hasStateChanges =
+        selectedPaths.size > 0 &&
+        inspectorBuffer &&
+        inspectorBuffer.state.some((s) => s !== -1);
+    let canApply = dirtyFields.size > 0 || hasStateChanges;
+
+    let applyAllButtonHtml = "";
+    if (selectedPaths.size > 0) {
+        applyAllButtonHtml = `
+                <div style="margin-top: 15px;">
+                    <button id="btn-apply-selection" style="width: 100%; justify-content: center; background: var(--success);" onclick="applyInspectorToSelection()" ${!canApply ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ""}>
+                        APPLY TO SELECTION (${selectedPaths.size})
+                    </button>
+                </div>`;
+    }
+
+    container.innerHTML = `
+                <div class="inspector-section">
+                    <div class="inspector-label">Channels Configuration</div>
+                    <div class="state-blocks" style="justify-content: flex-start; gap: 4px; flex-wrap: wrap;">
+                        ${stateBlocksHtml}
+                    </div>
+                    ${dimmerControlHtml}
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">1. In-Transition</div>
+                    <select class="inspector-select" onchange="updatePhase('${activePath}', 'in', 'type', this.value, true)">
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("in.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
+                        <option value="none" ${effectiveInType === "none" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>None</option>
+                        <option value="fade" ${effectiveInType === "fade" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>Fade</option>
+                        <option value="steady" ${effectiveInType === "steady" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>Steady</option>
+                    </select>
+                    ${
+                        effectiveInType !== "none"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("in.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <input type="number" value="${currentPhases.in.duration}" oninput="updatePhase('${activePath}', 'in', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">2. Animation</div>
+                    <select class="inspector-select" onchange="updatePhase('${activePath}', 'anim', 'type', this.value, true)">
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("anim.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
+                        <option value="none" ${effectiveAnimType === "none" && (selectedPaths.size === 0 || dirtyFields.has("anim.type")) ? "selected" : ""}>None</option>
+                        <option value="flicker" ${effectiveAnimType === "flicker" && (selectedPaths.size === 0 || dirtyFields.has("anim.type")) ? "selected" : ""}>Flicker</option>
+                    </select>
+                    ${
+                        effectiveAnimType === "flicker"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Amount: ${selectedPaths.size > 0 && !dirtyFields.has("anim.amount") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <input type="number" value="${currentPhases.anim.amount || 0}" oninput="updatePhase('${activePath}', 'anim', 'amount', this.value, false)" style="width:70px;">
+                    </div>
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("anim.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <input type="number" value="${currentPhases.anim.duration}" oninput="updatePhase('${activePath}', 'anim', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-label">3. Out-Transition</div>
+                    <select class="inspector-select" onchange="updatePhase('${activePath}', 'out', 'type', this.value, true)">
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("out.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
+                        <option value="none" ${effectiveOutType === "none" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>None</option>
+                        <option value="fade" ${effectiveOutType === "fade" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>Fade</option>
+                        <option value="steady" ${effectiveOutType === "steady" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>Steady</option>
+                    </select>
+                    ${
+                        effectiveOutType !== "none"
+                            ? `
+                    <div class="inspector-row">
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("out.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <input type="number" value="${currentPhases.out.duration}" oninput="updatePhase('${activePath}', 'out', 'duration', this.value, false)" style="width:70px;">
+                    </div>`
+                            : ""
+                    }
+                </div>
+                ${applyAllButtonHtml}
+            `;
+}
+
+// ==========================================================================
+// PHASE & GROUP VALUE UPDATES
+// Editing individual phase fields and group repeat/bounce settings.
+// ==========================================================================
+function updatePhase(path, phase, key, value, refreshInspector = false) {
+    if (selectedPaths.size > 0) {
+        if (!inspectorBuffer) {
+            let p = getObjByPath(path);
+            if (!p.phases) p = migratePattern(p);
+            inspectorBuffer = {
+                phases: JSON.parse(JSON.stringify(p.phases)),
+                state: new Array(config.channels).fill(-1),
+            };
+        }
+        if (key === "type") {
+            if (value === "unchanged") {
+                dirtyFields.delete(`${phase}.type`);
+                dirtyFields.delete(`${phase}.duration`);
+                dirtyFields.delete(`${phase}.amount`);
+            } else {
+                inspectorBuffer.phases[phase].type = value;
+                dirtyFields.add(`${phase}.type`);
+                if (value !== "none") {
+                    inspectorBuffer.phases[phase].duration = 500;
+                    dirtyFields.add(`${phase}.duration`);
+                }
+                if (value === "flicker") {
+                    inspectorBuffer.phases[phase].amount = 3;
+                    dirtyFields.add(`${phase}.amount`);
+                }
+            }
+        } else {
+            inspectorBuffer.phases[phase][key] = parseInt(value) || 0;
+            dirtyFields.add(`${phase}.${key}`);
+        }
+        if (refreshInspector) renderInspector();
+        else {
+            let hasStateChanges = inspectorBuffer.state.some((s) => s !== -1);
+            if (dirtyFields.size > 0 || hasStateChanges) {
+                const applyBtn = document.getElementById("btn-apply-selection");
+                if (applyBtn) {
+                    applyBtn.removeAttribute("disabled");
+                    applyBtn.style.cssText =
+                        "width: 100%; justify-content: center; background: var(--success);";
+                }
+            }
+        }
+        return;
+    }
+
+    let p = getObjByPath(path);
+    if (!p.phases) p = migratePattern(p);
+    if (key === "type") {
+        p.phases[phase].type = value;
+        if (value !== "none" && !p.phases[phase].duration)
+            p.phases[phase].duration = 500;
+        if (value === "flicker" && !p.phases[phase].amount)
+            p.phases[phase].amount = 3;
+    } else {
+        p.phases[phase][key] = parseInt(value) || 0;
+    }
+
+    updateJsonPanel();
+    renderTable();
+    if (refreshInspector) renderInspector();
+}
+
+function updateGroupVal(path, key, val, refresh = false) {
+    let p = config.patterns[parseInt(path)];
+    if (key === "repeat") p.repeat = parseInt(val) || 1;
+    if (key === "bounce") p.bounce = !!val;
+    updateJsonPanel();
+    if (refresh) renderInspector();
+}
+
+function renderTableSelection(skipInspector = false) {
+    const count = selectedPaths.size;
+    document.querySelectorAll("#pattern-list tr").forEach((tr) => {
+        if (tr.dataset.path)
+            tr.classList.toggle("selected", selectedPaths.has(tr.dataset.path));
+    });
+    document.getElementById("del-count-text").innerText =
+        count > 0 ? `(${count})` : "";
+    [
+        "sel-clone",
+        "sel-reverse",
+        "sel-invert",
+        "sel-mirror",
+        "sel-left",
+        "sel-right",
+        "sel-clear",
+        "sel-delete",
+        "sel-group",
+        "sel-odd",
+        "sel-even",
+    ].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = count === 0;
+    });
+    if (!skipInspector) renderInspector();
+}
+
+// ==========================================================================
+// PLAYBACK ENGINE
+// Runs the configured pattern in real time and drives the live preview.
+// ==========================================================================
+function togglePlayback() {
+    if (isPlaying) stopStrobe();
+    else playStrobe();
+}
+
+function highlightPlayingRow(path) {
+    document
+        .querySelectorAll("#pattern-list tr")
+        .forEach((tr) => tr.classList.remove("playing"));
+    if (path && showSteps) {
+        const tr = document.querySelector(
+            `#pattern-list tr[data-path='${path}']`,
+        );
+        if (tr) tr.classList.add("playing");
+    }
+}
+
+async function playStrobe() {
+    if (isPlaying) return;
+    isPlaying = true;
+    abortController = new AbortController();
+    const btn = document.getElementById("main-playback-btn");
+    btn.className = "stop-btn";
+    document.getElementById("playback-text").innerText = "STOP";
+    document.getElementById("playback-icon").src = "/assets/stop.svg";
+    try {
+        while (isPlaying) {
+            if (config.patterns.length === 0) break;
+            let indices =
+                soloGroupIdx !== null &&
+                config.patterns[soloGroupIdx]?.type === "group"
+                    ? [soloGroupIdx]
+                    : config.patterns.map((_, i) => i);
+            for (let gIdx of indices) {
+                let item = config.patterns[gIdx];
+                if (!item || !isPlaying) continue;
+                if (item.type === "group") {
+                    for (let r = 0; r < item.repeat; r++) {
+                        for (
+                            let pIdx = 0;
+                            pIdx < item.patterns.length;
+                            pIdx++
+                        ) {
+                            if (!isPlaying) break;
+                            await playSinglePattern(
+                                item.patterns[pIdx],
+                                `${gIdx}-${pIdx}`,
+                            );
+                        }
+                        if (
+                            item.bounce &&
+                            isPlaying &&
+                            item.patterns.length > 1
+                        ) {
+                            for (
+                                let pIdx = item.patterns.length - 2;
+                                pIdx >= 0;
+                                pIdx--
+                            ) {
+                                if (
+                                    !isPlaying ||
+                                    (pIdx === 0 && r < item.repeat - 1)
+                                )
+                                    continue;
+                                await playSinglePattern(
+                                    item.patterns[pIdx],
+                                    `${gIdx}-${pIdx}`,
+                                );
+                            }
+                        }
+                    }
+                } else await playSinglePattern(item, `${gIdx}`);
+            }
+        }
+    } catch (e) {}
+}
+
+async function playSinglePattern(p, path) {
+    highlightPlayingRow(path);
+    if (!p.phases) p = migratePattern(p);
+    let timePlayed = false;
+
+    if (p.phases.in.type === "fade" && p.phases.in.duration > 0) {
+        renderLights(p.state, p.phases.in.duration);
+        await sleep(p.phases.in.duration, abortController.signal);
+        timePlayed = true;
+    } else if (p.phases.in.type === "steady" && p.phases.in.duration > 0) {
+        renderLights(p.state, 0);
+        await sleep(p.phases.in.duration, abortController.signal);
+        timePlayed = true;
+    }
+
+    if (p.phases.anim.type === "flicker" && p.phases.anim.amount > 0) {
+        let animDur = p.phases.anim.duration > 0 ? p.phases.anim.duration : 500;
+        const step = animDur / (p.phases.anim.amount * 2);
+        for (let f = 0; f < p.phases.anim.amount * 2; f++) {
+            if (!isPlaying) break;
+            renderLights(
+                f % 2 === 0 ? p.state : new Array(config.channels).fill(0),
+                0,
+            );
+            await sleep(step, abortController.signal);
+        }
+        timePlayed = true;
+    }
+
+    if (p.phases.out.type === "fade" && p.phases.out.duration > 0) {
+        renderLights(new Array(config.channels).fill(0), p.phases.out.duration);
+        await sleep(p.phases.out.duration, abortController.signal);
+        timePlayed = true;
+    } else if (p.phases.out.type === "steady" && p.phases.out.duration > 0) {
+        renderLights(p.state, 0);
+        await sleep(p.phases.out.duration, abortController.signal);
+        timePlayed = true;
+    }
+    if (!timePlayed) await sleep(10, abortController.signal);
+}
+
+function stopStrobe() {
+    isPlaying = false;
+    abortController?.abort();
+    highlightPlayingRow(null);
+    const btn = document.getElementById("main-playback-btn");
+    btn.className = "play-btn";
+    document.getElementById("playback-text").innerText = "PLAY";
+    document.getElementById("playback-icon").src = "/assets/play.svg";
+    renderLights(new Array(config.channels).fill(0), 0);
+}
+
+// ==========================================================================
+// BATCH ROW / GROUP OPERATIONS
+// Operations that act on the entire current selection (reverse, invert,
+// mirror, duplicate, delete).
+// ==========================================================================
+function deletePaths(pathsArray) {
+    pathsArray.sort((a, b) => {
+        let [aG, aP] = a.split("-").map(Number);
+        let [bG, bP] = b.split("-").map(Number);
+        if (aG !== bG) return bG - aG;
+        return aP !== undefined && bP !== undefined ? bP - aP : 0;
+    });
+    pathsArray.forEach((path) => {
+        let [gIdx, pIdx] = path.split("-");
+        if (pIdx === undefined) config.patterns.splice(Number(gIdx), 1);
+        else config.patterns[Number(gIdx)].patterns.splice(Number(pIdx), 1);
+    });
+    config.patterns = config.patterns.filter(
+        (p) => p.type !== "group" || p.patterns.length > 0,
+    );
+}
+function reverseSelectedOrder() {
+    if (selectedPaths.size < 2) return;
+    const groups = {};
+    selectedPaths.forEach((path) => {
+        const parts = path.split("-");
+        const key = parts.length > 1 ? `group-${parts[0]}` : "root";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(path);
+    });
+    Object.keys(groups).forEach((key) => {
+        const paths = groups[key].sort(
+            (a, b) => getIdxByPath(a) - getIdxByPath(b),
+        );
+        if (paths.length < 2) return;
+        const parentArr = getArrByPath(paths[0]);
+        const indices = paths.map((p) => getIdxByPath(p));
+        const items = indices.map((idx) => parentArr[idx]);
+        items.reverse();
+        indices.forEach((idx, i) => (parentArr[idx] = items[i]));
+    });
+    renderTable();
+    showToast("Reversed order");
+}
+function invertSelected() {
+    selectedPaths.forEach((path) => invertRow(path, false));
+    renderTable();
+    showToast("Inverted selection");
+}
+function mirrorSelected() {
+    selectedPaths.forEach((path) => mirrorPattern(path, false));
+    renderTable();
+    showToast("Mirrored selection");
+}
+function duplicateSelected() {
+    if (selectedPaths.size === 0) return;
+    let roots = {};
+    selectedPaths.forEach((p) => {
+        let r = p.split("-")[0];
+        if (!roots[r]) roots[r] = [];
+        roots[r].push(p);
+    });
+    let sorted = Object.keys(roots)
+        .map(Number)
+        .sort((a, b) => a - b);
+    let clones = [];
+    sorted.forEach((idx) => {
+        let item = config.patterns[idx];
+        if (
+            item.type === "group" &&
+            !item.patterns.every((_, pIdx) =>
+                selectedPaths.has(`${idx}-${pIdx}`),
+            )
+        ) {
+            item.patterns.forEach((c, pIdx) => {
+                if (selectedPaths.has(`${idx}-${pIdx}`))
+                    clones.push(JSON.parse(JSON.stringify(c)));
+            });
+        } else clones.push(JSON.parse(JSON.stringify(item)));
+    });
+    config.patterns.splice(sorted[sorted.length - 1] + 1, 0, ...clones);
+    selectedPaths.clear();
+    renderTable();
+    showToast("Duplicated selection");
+}
+
+// ==========================================================================
+// ROW & GROUP CRUD
+// Add / duplicate / invert / remove individual rows and groups.
+// ==========================================================================
+function deleteSelected() {
+    if (selectedPaths.size === 0) return;
+    const count = selectedPaths.size;
+    const sortedPaths = Array.from(selectedPaths).sort((a, b) => {
+        let [aG, aP] = a.split("-").map(Number);
+        let [bG, bP] = b.split("-").map(Number);
+        return aG === bG ? (aP || 0) - (bP || 0) : aG - bG;
+    });
+    const lastPath = sortedPaths[sortedPaths.length - 1];
+    const rows = Array.from(
+        document.querySelectorAll("#pattern-list tr"),
+    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    const lastIdx = rows.findIndex(
+        (tr) => (tr.dataset.path || tr.dataset.groupPath) === lastPath,
+    );
+    deletePaths(Array.from(selectedPaths));
+    selectedPaths.clear();
+    activePath = null;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTable();
+    const newRows = Array.from(
+        document.querySelectorAll("#pattern-list tr"),
+    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    if (newRows.length > 0) {
+        setActivePath(
+            newRows[Math.min(lastIdx, newRows.length - 1)].dataset.path ||
+                newRows[Math.min(lastIdx, newRows.length - 1)].dataset
+                    .groupPath,
+        );
+    } else renderInspector();
+    showToast(`Deleted ${count} items`);
+}
+
+UX: function duplicateGroup(gIdx) {
+    config.patterns.splice(
+        gIdx + 1,
+        0,
+        JSON.parse(JSON.stringify(config.patterns[gIdx])),
+    );
+    setActivePath((gIdx + 1).toString());
+}
+
+function invertGroup(gIdx) {
+    config.patterns[gIdx].patterns.forEach((p) => {
+        p.state = p.state.map((s) => {
+            let val = parseFloat(s) || 0;
+            return Math.round((1.0 - val) * 100) / 100;
+        });
+    });
+    renderTable();
+}
+
+function toggleSolo(gIdx) {
+    soloGroupIdx = soloGroupIdx === gIdx ? null : gIdx;
+    renderTable();
+}
+
+function addPattern() {
+    config.patterns.push({
+        state: new Array(config.channels).fill(0),
+        phases: {
+            in: { type: "none", duration: 0 },
+            anim: { type: "none", amount: 0, duration: 0 },
+            out: { type: "steady", duration: 500 },
+        },
+    });
+    renderTable();
+}
+
+function duplicateRow(path) {
+    let arr = getArrByPath(path);
+    let idx = getIdxByPath(path);
+    arr.splice(idx + 1, 0, JSON.parse(JSON.stringify(arr[idx])));
+    renderTable();
+}
+
+function invertRow(path, render = true) {
+    let p = getObjByPath(path);
+    p.state = p.state.map((s) => {
+        let val = parseFloat(s) || 0;
+        return Math.round((1.0 - val) * 100) / 100;
+    });
+    if (render) renderTable();
+}
+
+function removePattern(path) {
+    const rows = Array.from(
+        document.querySelectorAll("#pattern-list tr"),
+    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    const currentIdx = rows.findIndex(
+        (tr) => (tr.dataset.path || tr.dataset.groupPath) === path,
+    );
+    if (!path.includes("-")) {
+        const idx = parseInt(path);
+        config.patterns.splice(idx, 1);
+        if (soloGroupIdx === idx) soloGroupIdx = null;
+        else if (soloGroupIdx > idx) soloGroupIdx--;
+    } else deletePaths([path]);
+    activePath = null;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTable();
+    const newRows = Array.from(
+        document.querySelectorAll("#pattern-list tr"),
+    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    if (newRows.length > 0) {
+        setActivePath(
+            newRows[Math.min(currentIdx, newRows.length - 1)].dataset.path ||
+                newRows[Math.min(currentIdx, newRows.length - 1)].dataset
+                    .groupPath,
+        );
+    } else renderInspector();
+    showToast("Item deleted");
+}
+
+function clearAllPatterns() {
+    if (confirm("Delete ALL rows?")) {
+        config.patterns = [];
+        selectedPaths.clear();
+        activePath = null;
+        inspectorBuffer = null;
+        dirtyFields.clear();
+        soloGroupIdx = null;
+        renderTable();
+        renderInspector();
+    }
+}
+
+// ==========================================================================
+// ROW STATE TRANSFORMS
+// Shifting a row's channel values left/right, or mirroring them.
+// ==========================================================================
+function shiftPattern(path, dir, render = true) {
+    let p = getObjByPath(path);
+    if (!p || p.type === "group") return;
+    dir === "left"
+        ? p.state.push(p.state.shift())
+        : p.state.unshift(p.state.pop());
+    if (render) renderTable();
+    updateJsonPanel();
+}
+function mirrorPattern(path, render = true) {
+    let p = getObjByPath(path);
+    p.state.reverse();
+    if (render) renderTable();
+    updateJsonPanel();
+}
+
+// ==========================================================================
+// DRAG & DROP REORDERING
+// Reordering rows in the table via native HTML5 drag and drop.
+// ==========================================================================
+function handleDrop(target, dragged) {
+    const isTChild = target.includes("-"),
+        isDChild = dragged.includes("-");
+    if (!isTChild && !isDChild) {
+        const tIdx = parseInt(target),
+            dIdx = parseInt(dragged);
+        let indicesToMove = selectedPaths.has(dragged)
+            ? Array.from(selectedPaths)
+                  .filter((p) => !p.includes("-"))
+                  .map(Number)
+                  .sort((a, b) => a - b)
+            : [dIdx];
+        const items = indicesToMove.map((idx) => config.patterns[idx]);
+        for (let i = indicesToMove.length - 1; i >= 0; i--) {
+            config.patterns.splice(indicesToMove[i], 1);
+        }
+        let insertIdx = tIdx - indicesToMove.filter((idx) => idx < tIdx).length;
+        config.patterns.splice(insertIdx, 0, ...items);
+        const newSelection = new Set();
+        for (let i = 0; i < items.length; i++) {
+            newSelection.add((insertIdx + i).toString());
+        }
+        selectedPaths = newSelection;
+    } else if (isTChild && isDChild) {
+        const tG = target.split("-")[0],
+            dG = dragged.split("-")[0];
+        if (tG !== dG) return;
+        const gIdx = parseInt(tG),
+            tIdx = parseInt(target.split("-")[1]),
+            dIdx = parseInt(dragged.split("-")[1]);
+        let childIndices = selectedPaths.has(dragged)
+            ? Array.from(selectedPaths)
+                  .filter((p) => p.startsWith(tG + "-"))
+                  .map((p) => parseInt(p.split("-")[1]))
+                  .sort((a, b) => a - b)
+            : [dIdx];
+        const children = childIndices.map(
+            (idx) => config.patterns[gIdx].patterns[idx],
+        );
+        for (let i = childIndices.length - 1; i >= 0; i--) {
+            config.patterns[gIdx].patterns.splice(childIndices[i], 1);
+        }
+        let insertIdx = tIdx - childIndices.filter((idx) => idx < tIdx).length;
+        config.patterns[gIdx].patterns.splice(insertIdx, 0, ...children);
+        const newSelection = new Set();
+        for (let i = 0; i < children.length; i++) {
+            newSelection.add(`${gIdx}-${insertIdx + i}`);
+        }
+        selectedPaths = newSelection;
+    }
+    renderTable();
+    showToast("Moved selection");
+}
+
+// ==========================================================================
+// JSON PANEL SYNC
+// Keeps the raw-JSON textarea in the modal in sync with `config`.
+// ==========================================================================
+function updateJsonPanel() {
+    const el = document.getElementById("json-input"),
+        currentJson = JSON.stringify(config);
+    if (document.activeElement !== el) {
+        el.value = JSON.stringify(config, null, 2).replace(
+            /"state":\s*\[\s+([\s\S]*?)\s+\]/g,
+            (m, p) =>
+                `"state": [${p
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter((s) => s !== "")
+                    .join(", ")}]`,
+        );
+    }
+    fetch("/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: currentJson,
+    }).catch((e) => {});
+    localStorage.setItem("strobe_config_v5", currentJson);
+    if (
+        !isUndoRedoAction &&
+        (historyIndex === -1 || currentJson !== historyStack[historyIndex])
+    )
+        saveState(currentJson);
+    updateUndoRedoButtons();
+}
+
+function handleManualJsonEdit(val) {
+    try {
+        const p = JSON.parse(val);
+        if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
+            config = p;
+            if (!config._strobe_editor_version)
+                config._strobe_editor_version = "1";
+            if (!config.colors) config.colors = [];
+            while (config.colors.length < config.channels)
+                config.colors.push("#ff2a2a");
+            syncCanvasLayoutLength();
+            document.getElementById("light-bar").innerHTML = "";
+            document.getElementById("custom-layout-view").innerHTML = "";
+            renderLights(new Array(config.channels).fill(0), 0);
+            document.getElementById("global-channels").value = config.channels;
+            activePath = null;
+            inspectorBuffer = null;
+            dirtyFields.clear();
+            renderTable();
+            renderInspector();
+        }
+    } catch (e) {}
+}
+const sleep = (ms, sig) =>
+    new Promise((res, rej) => {
+        const t = setTimeout(res, ms);
+        sig?.addEventListener("abort", () => {
+            clearTimeout(t);
+            rej();
+        });
+    });
+
+// ==========================================================================
+// CUSTOM CANVAS LAYOUT
+// The free-form "custom layout" preview where channel nodes can be
+// dragged to arbitrary positions on a canvas.
+// ==========================================================================
+function loadCanvasLayoutData() {
+    let data = localStorage.getItem("strobe_canvas_layout_v5");
+    if (data) {
+        try {
+            canvasLayoutData = JSON.parse(data);
+        } catch (e) {
+            canvasLayoutData = [];
+        }
+    } else {
+        canvasLayoutData = [];
+    }
+    syncCanvasLayoutLength();
+}
+
+function syncCanvasLayoutLength() {
+    while (canvasLayoutData.length < config.channels) {
+        let i = canvasLayoutData.length;
+        let row = Math.floor(i / 5);
+        let col = i % 5;
+        canvasLayoutData.push({
+            x: 15 + col * 16,
+            y: 25 + row * 40,
+            shape: "circle",
+        });
+    }
+    if (canvasLayoutData.length > config.channels) {
+        canvasLayoutData = canvasLayoutData.slice(0, config.channels);
+    }
+    localStorage.setItem(
+        "strobe_canvas_layout_v5",
+        JSON.stringify(canvasLayoutData),
+    );
+}
+
+function setPreviewMode(mode) {
+    previewMode = mode;
+    const bar = document.getElementById("light-bar");
+    const customView = document.getElementById("custom-layout-view");
+    const barBtn = document.getElementById("view-bar-btn");
+    const customBtn = document.getElementById("view-custom-btn");
+    const shapeCtrls = document.getElementById("custom-shape-controls");
+
+    if (mode === "custom") {
+        bar.style.display = "none";
+        customView.style.display = "block";
+        barBtn.style.background = "transparent";
+        customBtn.style.background = "var(--accent)";
+        shapeCtrls.style.display = "flex";
+        document.getElementById("shape-control-ch-num").innerText =
+            activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : "-";
+        if (
+            activeInspectorChannel !== -1 &&
+            canvasLayoutData[activeInspectorChannel]
+        ) {
+            document.getElementById("canvas-item-shape").value =
+                canvasLayoutData[activeInspectorChannel].shape;
+        }
+    } else {
+        bar.style.display = "flex";
+        customView.style.display = "none";
+        barBtn.style.background = "var(--accent)";
+        customBtn.style.background = "transparent";
+        shapeCtrls.style.display = "none";
+    }
+
+    if (activePath) {
+        let currP = getObjByPath(activePath);
+        if (currP && currP.state) renderLights(currP.state, 0);
+    } else {
+        renderLights(new Array(config.channels).fill(0), 0);
+    }
+}
+
+function setCanvasItemShape(shape) {
+    if (
+        activeInspectorChannel !== -1 &&
+        canvasLayoutData[activeInspectorChannel]
+    ) {
+        canvasLayoutData[activeInspectorChannel].shape = shape;
+        localStorage.setItem(
+            "strobe_canvas_layout_v5",
+            JSON.stringify(canvasLayoutData),
+        );
+        if (activePath) {
+            let currP = getObjByPath(activePath);
+            if (currP && currP.state) renderLights(currP.state, 0);
+        } else {
+            renderLights(new Array(config.channels).fill(0), 0);
+        }
+    }
+}
+
+function handleCanvasNodeMouseDown(e, index) {
+    e.stopPropagation();
+    e.preventDefault();
+    draggedChannelIdx = index;
+    selectInspectorChannel(index);
+
+    const container = document.getElementById("custom-layout-view");
+    const rect = container.getBoundingClientRect();
+
+    function onMouseMove(moveEvent) {
+        if (draggedChannelIdx === null) return;
+        let relX = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+        let relY = ((moveEvent.clientY - rect.top) / rect.height) * 100;
+
+        relX = Math.min(100, Math.max(0, relX));
+        relY = Math.min(100, Math.max(0, relY));
+
+        canvasLayoutData[draggedChannelIdx].x = Math.round(relX * 10) / 10;
+        canvasLayoutData[draggedChannelIdx].y = Math.round(relY * 10) / 10;
+
+        const el = document.getElementById(`canvas-node-${draggedChannelIdx}`);
+        if (el) {
+            el.style.left = `${canvasLayoutData[draggedChannelIdx].x}%`;
+            el.style.top = `${canvasLayoutData[draggedChannelIdx].y}%`;
+        }
+    }
+
+    function onMouseUp() {
+        draggedChannelIdx = null;
+        localStorage.setItem(
+            "strobe_canvas_layout_v5",
+            JSON.stringify(canvasLayoutData),
+        );
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+}
+
+// ==========================================================================
+// LIGHT PREVIEW RENDERING
+// Draws the current channel state onto the bar/canvas preview.
+// ==========================================================================
+function renderLights(state, transitionMs = 0) {
+    const bar = document.getElementById("light-bar");
+    const customView = document.getElementById("custom-layout-view");
+    if (!bar || !customView) return;
+
+    if (!config.colors) config.colors = [];
+    while (config.colors.length < config.channels) {
+        config.colors.push("#ff2a2a");
+    }
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(
+            JSON.stringify({
+                type: "LIVE",
+                state: state,
+                transition: transitionMs,
+            }),
+        );
+    }
+
+    if (bar.children.length !== state.length) {
+        bar.innerHTML = "";
+        state.forEach((_, i) => {
+            const container = document.createElement("div");
+            container.className = "light-container";
+            container.style.cssText =
+                "display: flex; flex-direction: column; flex: 1; align-items: center; gap: 4px; height: 100%; justify-content: space-between;";
+
+            const l = document.createElement("div");
+            l.className = "light";
+            l.style.cssText =
+                "width: 100%; flex: 1; background: #222; border-radius: 4px; transition: all 0.05s; border: 1px solid var(--border);";
+
+            const controls = document.createElement("div");
+            controls.className = "channel-control";
+            controls.style.cssText =
+                "display: flex; align-items: center; gap: 4px; font-size: 10px; color: #888; font-weight: bold; line-height: 1;";
+
+            const numLabel = document.createElement("span");
+            numLabel.innerText = i + 1;
+
+            const picker = document.createElement("div");
+            picker.className = "channel-color-swatch";
+            picker.dataset.color = config.colors[i] || "#ff2a2a";
+            picker.style.cssText =
+                "width: 14px; height: 14px; background-color: " +
+                (config.colors[i] || "#ff2a2a") +
+                "; border: 1px solid #ffffff; box-shadow: 0 0 0 1px #444; border-radius: 2px; cursor: pointer; padding:0; margin:0;";
+
+            picker.onclick = (e) => {
+                openCustomColorPopup(e, i);
+            };
+
+            controls.appendChild(numLabel);
+            controls.appendChild(picker);
+            container.appendChild(l);
+            container.appendChild(controls);
+            bar.appendChild(container);
+        });
+    }
+
+    if (customView.children.length !== state.length) {
+        customView.innerHTML = "";
+        state.forEach((_, i) => {
+            const el = document.createElement("div");
+            el.className = "canvas-light-node";
+            el.id = `canvas-node-${i}`;
+            el.dataset.channel = i;
+            el.innerHTML = `<span>${i + 1}</span>`;
+
+            el.onmousedown = (e) => handleCanvasNodeMouseDown(e, i);
+            el.oncontextmenu = (e) => {
+                e.preventDefault();
+                openCustomColorPopup(e, i);
+            };
+
+            customView.appendChild(el);
+        });
+    }
+
+    if (canvasLayoutData.length !== config.channels) {
+        syncCanvasLayoutLength();
+    }
+
+    Array.from(bar.children).forEach((container, i) => {
+        const l = container.querySelector(".light");
+        const picker = container.querySelector(".channel-color-swatch");
+        if (picker && picker.dataset.color !== config.colors[i]) {
+            picker.dataset.color = config.colors[i];
+            picker.style.backgroundColor = config.colors[i];
+        }
+        if (!l) return;
+        if (transitionMs > 0)
+            l.style.transition = `all ${transitionMs}ms ease-in-out`;
+        else l.style.transition = `all 0.05s`;
+        const val = parseFloat(state[i]) || 0;
+        const chanColor = config.colors[i] || "#ff2a2a";
+        if (val > 0) {
+            l.classList.add("on");
+            l.style.background = chanColor;
+            l.style.borderColor = chanColor;
+            l.style.opacity = val;
+            l.style.boxShadow = `0 0 ${15 * val}px ${chanColor}`;
+        } else {
+            l.classList.remove("on");
+            l.style.background = "#222";
+            l.style.borderColor = "var(--border)";
+            l.style.opacity = 1;
+            l.style.boxShadow = "none";
+        }
+    });
+
+    Array.from(customView.children).forEach((el, i) => {
+        const layout = canvasLayoutData[i];
+        if (!layout) return;
+
+        el.className = `canvas-light-node shape-${layout.shape}`;
+        if (i === activeInspectorChannel && previewMode === "custom") {
+            el.classList.add("active-node-sel");
+        }
+
+        el.style.left = `${layout.x}%`;
+        el.style.top = `${layout.y}%`;
+
+        if (transitionMs > 0)
+            el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;
+        else el.style.transition = `all 0.05s, left 0s, top 0s`;
+
+        const val = parseFloat(state[i]) || 0;
+        const chanColor = config.colors[i] || "#ff2a2a";
+        if (val > 0) {
+            el.style.background = chanColor;
+            el.style.borderColor = chanColor;
+            el.style.opacity = val;
+            el.style.boxShadow = `0 0 ${15 * val}px ${chanColor}`;
+            el.style.color = "#000";
+        } else {
+            el.style.background = "#222";
+            el.style.borderColor = "var(--border)";
+            el.style.opacity = 1;
+            el.style.boxShadow = "none";
+            el.style.color = "#fff";
+        }
+    });
+}
+
+// ==========================================================================
+// APP INITIALIZATION
+// Loads the saved config, restores history, and renders the initial UI
+// once the DOM is ready.
+// ==========================================================================
+document.addEventListener("DOMContentLoaded", async () => {
+    try {
+        const response = await fetch("/config.json");
+        if (response.ok) {
+            config = await response.json();
+        } else {
+            throw new Error("Local fallback");
+        }
+    } catch (e) {
+        const savedConfig = localStorage.getItem("strobe_config_v5");
+        if (savedConfig) {
+            try {
+                config = JSON.parse(savedConfig);
+            } catch (err) {}
+        }
+    }
+    if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+    if (!config.colors) config.colors = [];
+    while (config.colors.length < config.channels)
+        config.colors.push("#ff2a2a");
+    loadCanvasLayoutData();
+    if (historyStack.length === 0 || historyIndex === -1) {
+        historyStack = [];
+        historyIndex = -1;
+        saveState(JSON.stringify(config));
+    }
+    document.getElementById("global-channels").value = config.channels;
+    renderLights(new Array(config.channels).fill(0), 0);
+    renderTable();
+    renderInspector();
+    updateUndoRedoButtons();
+
+    setActiveTool("hybrid");
+    setupLayoutPanelsResizers();
+
+    const cv = document.getElementById("custom-layout-view");
+    cv.addEventListener("mousedown", (e) => {
+        if (e.target === cv) {
+            selectInspectorChannel(-1);
+        }
+    });
+});
+
+// ==========================================================================
+// RESIZABLE LAYOUT PANELS
+// Drag handles for resizing the preview header and inspector panel.
+// ==========================================================================
+function setupLayoutPanelsResizers() {
+    const hResizer = document.getElementById("h-resizer");
+    const visualizerHeader = document.querySelector(".visualizer-header");
+    const vResizer = document.getElementById("v-resizer");
+    const inspectorPanel = document.getElementById("inspector-panel");
+
+    const savedHeaderHeight = localStorage.getItem("strobe_visualizer_height");
+    if (savedHeaderHeight && visualizerHeader) {
+        visualizerHeader.style.height = savedHeaderHeight;
+    } else if (visualizerHeader) {
+        visualizerHeader.style.height = "145px";
+    }
+
+    const savedInspectorWidth = localStorage.getItem("strobe_inspector_width");
+    if (savedInspectorWidth && inspectorPanel) {
+        inspectorPanel.style.width = savedInspectorWidth;
+    }
+
+    if (hResizer && visualizerHeader) {
+        hResizer.addEventListener("dblclick", () => {
+            visualizerHeader.style.height = "145px";
+            localStorage.removeItem("strobe_visualizer_height");
+            showToast("Visualizer preview reset to default layout");
+        });
+
+        hResizer.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            hResizer.classList.add("resizing");
+            document.body.classList.add("is-resizing");
+
+            const startY = e.clientY;
+            const startHeight = visualizerHeader.getBoundingClientRect().height;
+
+            function onMouseMove(e) {
+                const currentHeight = startHeight + (e.clientY - startY);
+                if (currentHeight >= 80 && currentHeight <= 400) {
+                    visualizerHeader.style.height = `${currentHeight}px`;
+                }
+            }
+
+            function onMouseUp() {
+                hResizer.classList.remove("resizing");
+                document.body.classList.remove("is-resizing");
+                localStorage.setItem(
+                    "strobe_visualizer_height",
+                    visualizerHeader.style.height,
+                );
+                window.removeEventListener("mousemove", onMouseMove);
+                window.removeEventListener("mouseup", onMouseUp);
+            }
+
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        });
+    }
+
+    if (vResizer && inspectorPanel) {
+        vResizer.addEventListener("dblclick", () => {
+            inspectorPanel.style.width = "";
+            localStorage.removeItem("strobe_inspector_width");
+            showToast("Inspector layout panels width reset to default");
+        });
+
+        vResizer.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            vResizer.classList.add("resizing");
+            document.body.classList.add("is-resizing");
+
+            const startX = e.clientX;
+            const startWidth = inspectorPanel.getBoundingClientRect().width;
+
+            function onMouseMove(e) {
+                const currentWidth = startWidth - (e.clientX - startX);
+                if (currentWidth >= 200 && currentWidth <= 600) {
+                    inspectorPanel.style.width = `${currentWidth}px`;
+                }
+            }
+
+            function onMouseUp() {
+                vResizer.classList.remove("resizing");
+                document.body.classList.remove("is-resizing");
+                localStorage.setItem(
+                    "strobe_inspector_width",
+                    inspectorPanel.style.width,
+                );
+                window.removeEventListener("mousemove", onMouseMove);
+                window.removeEventListener("mouseup", onMouseUp);
+            }
+
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        });
+    }
+}
+
+const ESP_IP = "192.168.4.1";
+let socket;
+
+function initWebSocket() {
+    console.log("[WS] Attempting connection to ws://" + ESP_IP + ":81 ...");
+    socket = new WebSocket(`ws://${ESP_IP}:81`);
+
+    socket.onopen = () => {
+        console.log(
+            "[WS] SUCCESS: Connected and synced with ESP32 Strobe Engine!",
+        );
+        showToast("Connected & Synced with ESP32");
+    };
+
+    socket.onclose = (event) => {
+        console.warn(
+            `[WS] DISCONNECTED: Code ${event.code}, Reason: ${event.reason || "None"}`,
+        );
+        // Auto-retry connection every 3 seconds
+        setTimeout(initWebSocket, 3000);
+    };
+
+    socket.onerror = (error) => {
+        console.error("[WS] ERROR DETECTED:", error);
+    };
+
+    socket.onmessage = (e) => {
+        // Logs anything the ESP32 sends BACK to your laptop
+        console.log("[WS] RECEIVED FROM ESP32 ->", e.data);
+    };
+}
+
+// INJECT THIS IN YOUR PLAYER LOOP:
+// Ensure that your HTML editor's timeline system calls this function
+// every single time a new frame or step plays!
+function broadcastLiveState(stateArray) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        const payload = JSON.stringify({ live: stateArray });
+
+        // This will print the exact JSON layout leaving your laptop
+        console.log("[WS] SENT TO ESP32 ->", payload);
+
+        socket.send(payload);
+    } else {
+        console.warn(
+            "[WS] CANNOT SEND: Socket is not open. Current state:",
+            socket ? socket.readyState : "Null",
+        );
+    }
+}
+
+// Call initialization on window load
+window.addEventListener("load", () => {
+    initWebSocket();
+});
+
+// WIRELESS OVER-THE-AIR CONFIGURATION UPLOAD
+function uploadConfigToESP32() {
+    // 1. Safety Check: Verify that we actually have a working WebSocket connection first
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        showToast("Upload Failed: Connect to 'Strobe-Editor' hotspot first!");
+        return;
+    }
+
+    showToast("Transmitting configuration to MicroSD card...");
+
+    // 2. Perform an HTTP POST request sending the raw editor 'config' object
+    fetch(`http://${ESP_IP}/upload`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config), // Grab the active workspace layout state
+    })
+        .then(async (response) => {
+            if (response.ok) {
+                showToast("Success! Configuration locked to MicroSD memory.");
+            } else {
+                const errorMsg = await response.text();
+                showToast("Upload rejected: " + errorMsg);
+            }
+        })
+        .catch((err) => {
+            console.error("Upload network exception:", err);
+            showToast("Network Error: Connection timed out or dropped.");
+        });
+}
