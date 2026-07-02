@@ -42,9 +42,8 @@
             <div class="shortcut-category">User Experience</div>
             <div
                 style="font-size: 11px; margin-bottom: 12px; line-height: 1.4; color: #ccc; background: #222; padding: 10px; border-radius: 4px; border: 1px solid var(--border);">
-                When clicking on an ON light state, if the current level % is the same from the clicked one, toggle it
-                off. But if the level % is different, keep it on but override the clicked level % with the current level
-                %.
+                When clicking on an ON light state, if the current level is the same as the clicked one, toggle it
+                off. But if the level is different, keep it on but override the clicked level with the current level.
             </div>
 
             <div class="shortcut-category">General Controls</div>
@@ -112,8 +111,8 @@
             <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
                 <div class="inspector-label" style="color: var(--text);">Paint Tool Configuration</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                    <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (%):</span>
-                    <input type="number" id="settings-brush-increment" min="1" max="100" step="1" value="10"
+                    <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (PWM):</span>
+                    <input type="number" id="settings-brush-increment" min="1" max="1023" step="1" value="100"
                         oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
                 </div>
             </div>
@@ -186,21 +185,19 @@
                     <div class="toolbar-group" id="brush-intensity-group">
                         <span class="label-text">LEVEL</span>
                         <div class="paint-widget" id="paint-tool-scroll-box" onwheel="handleBrushWidgetWheel(event)"
-                            title="Scroll wheel over box to modify level brightness percentage">
-                            <input type="number" class="paint-widget-input" id="global-brush-val" min="0" max="100"
-                                step="1" value="75" oninput="handleManualBrushInput(this.value)">
-                            <span
-                                style="font-size:11px; font-weight:bold; color:white; margin-left:-2px; text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); pointer-events: none;">%</span>
+                            title="Scroll wheel over box to modify level PWM value">
+                            <input type="number" class="paint-widget-input" id="global-brush-val" min="0" max="1023"
+                                step="1" value="1023" oninput="handleManualBrushInput(this.value)">
                         </div>
                         <div class="brush-dropdown-container" id="brush-presets-dropdown-wrapper">
                             <button class="btn-compact" style="padding:4px 8px; font-weight:bold;"
                                 onclick="toggleBrushPresetsMenu(event)" title="Brush Presets">...</button>
                             <div class="brush-popover" id="brush-presets-popup">
-                                <button onclick="selectBrushPreset(0.10)">10% Level</button>
-                                <button onclick="selectBrushPreset(0.25)">25% Level</button>
-                                <button onclick="selectBrushPreset(0.50)">50% Level</button>
-                                <button onclick="selectBrushPreset(0.75)">75% Level</button>
-                                <button onclick="selectBrushPreset(1.00)">100% Level</button>
+                                <button onclick="selectBrushPreset(102)">102 (10%)</button>
+                                <button onclick="selectBrushPreset(256)">256 (25%)</button>
+                                <button onclick="selectBrushPreset(512)">512 (50%)</button>
+                                <button onclick="selectBrushPreset(767)">767 (75%)</button>
+                                <button onclick="selectBrushPreset(1023)">1023 (MAX)</button>
                             </div>
                         </div>
                     </div>
