@@ -29,8 +29,7 @@
         </div>
         <label class="popup-custom-trigger">
             <input type="color" id="hidden-native-picker"
-                style="position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;"
-                oninput="selectCustomPopupColor(this.value)">
+                style="position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;">
             CUSTOM...
         </label>
     </div>
@@ -157,6 +156,31 @@
                     </div>
                     <div style="margin-right: 2rem;">
                         <div id="bg-dim-preview" style="display: flex; gap: 20px; align-items: center;"></div>
+                    </div>
+                </div>
+
+                <!-- Indicator Colors -->
+                <div style="margin-bottom: 20px;">
+
+                    <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                        <div class="inspector-label" style="color: var(--text);">Indicator Colors</div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label
+                                    style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                    <input type="radio" name="colorMode" value="global"
+                                        onchange="setColorMode('global')"> Global Color
+                                </label>
+                                <label
+                                    style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                    <input type="radio" name="colorMode" value="per-channel"
+                                        onchange="setColorMode('per-channel')"> Per-Channel Colors
+                                </label>
+                            </div>
+                            <div id="color-mode-controls">
+                                <!-- populated by updateColorModeControls() -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

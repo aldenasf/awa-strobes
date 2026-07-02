@@ -751,3 +751,15 @@ tr.group-header {
     transition: all 0.1s ease;
     background: #222;
 }
+
+.channel-chip:hover {
+    transform: scale(1.05);
+    border-color: #fff !important;
+}
+.swatch:hover {
+    transform: scale(1.1);
+    border-color: #fff !important;
+}
+.custom-color-btn:hover {
+    background: #666 !important;
+}

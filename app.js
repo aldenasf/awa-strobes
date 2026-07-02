@@ -21,7 +21,10 @@ let config = {
     _strobe_editor_version: "1",
     channels: 10,
     patterns: [],
-    colors: [],
+    // indicator colors – migrated from 'colors'
+    indicatorColorMode: "per-channel", // "global" or "per-channel"
+    indicatorColor: default_color, // used when mode is "global"
+    indicatorColors: [], // used when mode is "per-channel"
     pwmMin: DEFAULT_PWM_MIN,
     pwmMax: DEFAULT_PWM_MAX,
     indicatorOffAtMin: false,
@@ -60,10 +63,13 @@ let draggedChannelIdx = null;
 // Painting Tools Dynamic State Settings
 let activeTool = "hybrid";
 let brushBrightness = DEFAULT_PWM_MAX;
+
 // brushIncrement is now stored in localStorage (user preference)
 let brushIncrement = 100;
 let isPaintingActive = false;
 let nodesToggledInCurrentStroke = new Set();
+
+let isNativePickerOpen = false; // prevents closing popup while native picker is active
 
 let inspectorBuffer = null;
 let dirtyFields = new Set();
@@ -192,6 +198,32 @@ function ensureConfigDefaults() {
         config.pwmMin = DEFAULT_PWM_MIN;
         config.pwmMax = DEFAULT_PWM_MAX;
     }
+
+    // --- Indicator color migration & defaults ---
+    if (config.colors) {
+        config.indicatorColors = config.colors;
+        delete config.colors;
+    }
+    if (!config.indicatorColors) {
+        config.indicatorColors = new Array(config.channels).fill(default_color);
+    }
+    if (!config.indicatorColorMode) {
+        config.indicatorColorMode = "per-channel";
+    }
+    if (!config.indicatorColor) {
+        config.indicatorColor = config.indicatorColors[0] || default_color;
+    }
+    // ensure indicatorColors length matches channels
+    while (config.indicatorColors.length < config.channels) {
+        config.indicatorColors.push(default_color);
+    }
+    if (config.indicatorColors.length > config.channels) {
+        config.indicatorColors = config.indicatorColors.slice(
+            0,
+            config.channels,
+        );
+    }
+
     // ensure each pattern has backgroundDim
     (config.patterns || []).forEach((item) => {
         if (item.type === "group") {
@@ -223,6 +255,20 @@ function ensureConfigDefaults() {
     }
     if (config.defaultPattern.backgroundDim === undefined)
         config.defaultPattern.backgroundDim = false;
+}
+
+// ==========================================================================
+// EFFECTIVE COLOR RESOLUTION
+// --------------------------------------------------------------------------
+// Returns the color that should be used for a given channel, based on the
+// current indicator color mode.
+// ==========================================================================
+function getEffectiveColor(channelIdx) {
+    if (config.indicatorColorMode === "global") {
+        return config.indicatorColor || default_color;
+    } else {
+        return config.indicatorColors[channelIdx] || default_color;
+    }
 }
 
 function isChannelOn(val) {
@@ -310,10 +356,7 @@ function redoState() {
 function applyHistoryState() {
     config = JSON.parse(historyStack[historyIndex]);
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
-    if (!config.colors) config.colors = [];
-    while (config.colors.length < config.channels)
-        config.colors.push(default_color);
-    ensureConfigDefaults();
+    ensureConfigDefaults(); // also migrates colors
     syncCanvasLayoutLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
@@ -413,46 +456,56 @@ function filterSelectionOddEven(type) {
 // ==========================================================================
 // CUSTOM COLOR PICKER POPUP
 // ==========================================================================
+
 function openCustomColorPopup(e, context) {
     e.stopPropagation();
     currentPickerContext = context;
     const popup = document.getElementById("custom-color-popup");
-
     const hiddenPicker = document.getElementById("hidden-native-picker");
-    if (typeof context === "number") {
-        hiddenPicker.value = config.colors[context] || default_color;
+
+    let currentColor;
+    if (config.indicatorColorMode === "global") {
+        currentColor = config.indicatorColor || default_color;
+    } else if (typeof context === "number") {
+        currentColor = config.indicatorColors[context] || default_color;
     }
+    hiddenPicker.value = currentColor;
 
     const rect = e.target.getBoundingClientRect();
     popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
     popup.style.left = `${Math.min(window.innerWidth - 170, rect.left + window.scrollX)}px`;
     popup.style.display = "flex";
+
+    // Flag management
+    hiddenPicker.addEventListener("click", () => {
+        isNativePickerOpen = true;
+    });
+    hiddenPicker.addEventListener("input", (e) => {
+        isNativePickerOpen = false;
+        // console.log()
+        selectCustomPopupColor(hiddenPicker.value);
+        // The change event will trigger selectCustomPopupColor via oninput,
+        // but we handle it there as well
+    });
+    hiddenPicker.addEventListener("change", () => {
+        document.getElementById("custom-color-popup").style.display = "none";
+    });
+    hiddenPicker.addEventListener("blur", () => {
+        isNativePickerOpen = false;
+    });
 }
 
 function selectCustomPopupColor(val) {
     if (!val) return;
-    if (typeof currentPickerContext === "number") {
-        config.colors[currentPickerContext] = val;
-        updateJsonPanel();
-        renderTable();
-        renderInspector();
-        if (!isPlaying) {
-            if (activePath) {
-                let currP = getObjByPath(activePath);
-                if (currP && currP.state) {
-                    const bgDim = getBackgroundDimForPath(activePath);
-                    renderLights(currP.state, 0, bgDim);
-                }
-            } else {
-                renderLights(
-                    new Array(config.channels).fill(
-                        config.pwmMin || DEFAULT_PWM_MIN,
-                    ),
-                    0,
-                    false,
-                );
-            }
-        }
+    if (config.indicatorColorMode === "global") {
+        config.indicatorColor = val;
+    } else if (typeof currentPickerContext === "number") {
+        config.indicatorColors[currentPickerContext] = val;
+    }
+    refreshAll();
+    updateJsonPanel();
+    if (document.getElementById("settings-modal").style.display === "flex") {
+        updateColorModeControls(); // updates chip colors
     }
 }
 
@@ -465,7 +518,9 @@ function toggleHelp() {
 }
 
 document.addEventListener("click", () => {
-    document.getElementById("custom-color-popup").style.display = "none";
+    if (!isNativePickerOpen) {
+        document.getElementById("custom-color-popup").style.display = "none";
+    }
 });
 
 // ==========================================================================
@@ -706,13 +761,10 @@ function loadJsonFile(file) {
                 Array.isArray(p.patterns)
             ) {
                 config = p;
-                ensureConfigDefaults();
+                ensureConfigDefaults(); // migrates colors
                 config = migrateConfigToPWM(config);
                 if (!config._strobe_editor_version)
                     config._strobe_editor_version = "1";
-                if (!config.colors) config.colors = [];
-                while (config.colors.length < config.channels)
-                    config.colors.push(default_color);
                 syncCanvasLayoutLength();
                 document.getElementById("light-bar").innerHTML = "";
                 document.getElementById("custom-layout-view").innerHTML = "";
@@ -788,6 +840,9 @@ function toggleSettingsModal() {
         // Populate user preferences
         document.getElementById("settings-brush-increment").value =
             brushIncrement;
+
+        // Populate indicator color mode controls
+        updateColorModeControls();
     }
 }
 
@@ -921,7 +976,7 @@ function updateBackgroundDimPreview() {
         dot.className = "bg-preview-dot";
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
-        const color = config.colors[0] || default_color; // use first channel color
+        const color = getEffectiveColor(0);
         if (isOn) {
             dot.style.background = color;
             dot.style.opacity = opacity;
@@ -941,6 +996,213 @@ function updateBackgroundDimPreview() {
         wrapper.appendChild(label);
         previewContainer.appendChild(wrapper);
     });
+}
+
+// ==========================================================================
+// INDICATOR COLOR MODE CONTROLS (Settings)
+// ==========================================================================
+function setColorMode(mode) {
+    if (mode === config.indicatorColorMode) return;
+    if (mode === "global") {
+        // Switch to global: use the first channel's color (or most common if all same)
+        const colors = config.indicatorColors;
+        const allSame = colors.every((c) => c === colors[0]);
+        config.indicatorColor = allSame ? colors[0] : colors[0]; // could use most common, but we'll use first
+        config.indicatorColorMode = "global";
+    } else {
+        // Switch to per-channel: populate all channels with current global color
+        const globalColor = config.indicatorColor || default_color;
+        config.indicatorColors = new Array(config.channels).fill(globalColor);
+        config.indicatorColorMode = "per-channel";
+    }
+    updateColorModeControls();
+    refreshAll();
+    updateJsonPanel();
+}
+
+function updateColorModeControls() {
+    const container = document.getElementById("color-mode-controls");
+    if (!container) return;
+    const mode = config.indicatorColorMode;
+    let html = "";
+
+    if (mode === "global") {
+        const currentColor = config.indicatorColor || default_color;
+        html = `
+            <div style="margin-top: 5px;">
+                <div class="swatch-picker-container" data-slot="global">
+                    ${createColorSwatchPickerHTML(currentColor, "global")}
+                </div>
+                <div style="font-size: 10px; color: #666; margin-top: 4px;">All indicators share this color.</div>
+            </div>
+        `;
+    } else {
+        // Per-channel: chips
+        let chipsHtml = "";
+        for (let i = 0; i < config.channels; i++) {
+            const color = config.indicatorColors[i] || default_color;
+            chipsHtml += `
+                <div class="channel-chip" data-channel="${i}" style="
+                    display: inline-block;
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 3px;
+                    background: ${color};
+                    border: 2px solid #555;
+                    cursor: pointer;
+                    margin: 2px;
+                    box-sizing: border-box;
+                    transition: border-color 0.15s, transform 0.1s;
+                " title="CH${i + 1}"></div>
+            `;
+        }
+        html = `
+            <div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                ${chipsHtml}
+                <span style="font-size: 10px; color: #666; margin-left: 6px;">Click a chip to change its color.</span>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+
+    // Update radio buttons
+    const radios = document.querySelectorAll('input[name="colorMode"]');
+    radios.forEach((radio) => {
+        radio.checked = radio.value === mode;
+    });
+
+    // Attach chip click handlers (per-channel mode)
+    if (mode === "per-channel") {
+        container.querySelectorAll(".channel-chip").forEach((chip) => {
+            chip.addEventListener("click", (e) => {
+                const channel = parseInt(chip.dataset.channel);
+                openCustomColorPopup(e, channel);
+            });
+            chip.addEventListener("mouseenter", () => {
+                chip.style.borderColor = "#fff";
+            });
+            chip.addEventListener("mouseleave", () => {
+                chip.style.borderColor = "#555";
+            });
+        });
+    }
+
+    // For global mode, attach swatch picker listeners
+    if (mode === "global") {
+        const pickerContainer = container.querySelector(
+            ".swatch-picker-container",
+        );
+        if (pickerContainer) {
+            const swatches = pickerContainer.querySelectorAll(".swatch");
+            const customBtn =
+                pickerContainer.querySelector(".custom-color-btn");
+            const hiddenPicker = pickerContainer.querySelector(
+                ".hidden-color-input",
+            );
+
+            swatches.forEach((swatch) => {
+                swatch.addEventListener("click", () => {
+                    const color = swatch.dataset.color;
+                    handleSwatchColorChange(color);
+                });
+            });
+
+            customBtn.addEventListener("click", () => {
+                isNativePickerOpen = true;
+                hiddenPicker.click();
+            });
+
+            hiddenPicker.addEventListener("input", (e) => {
+                const color = e.target.value;
+                handleSwatchColorChange(color);
+            });
+
+            hiddenPicker.addEventListener("change", (e) => {
+                updateColorModeControls();
+            });
+        }
+    }
+}
+
+function createColorSwatchPickerHTML(currentColor, slotId) {
+    const presets = [
+        "#ff2a2a",
+        "#e7000b",
+        "#2b7fff",
+        "#1447e6",
+        "#e17100",
+        "#ffffff",
+    ];
+    let swatchesHtml = presets
+        .map(
+            (c) => `
+        <div class="swatch" data-color="${c}" style="
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border-radius: 3px;
+            background: ${c};
+            border: 2px solid ${c === currentColor ? "#fff" : "transparent"};
+            cursor: pointer;
+            margin-right: 4px;
+            box-sizing: border-box;
+            transition: border-color 0.15s, transform 0.1s;
+        "></div>
+    `,
+        )
+        .join("");
+
+    return `
+        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+            ${swatchesHtml}
+            <button class="custom-color-btn" style="
+                background: #444;
+                border: none;
+                color: #ccc;
+                padding: 2px 8px;
+                border-radius: 3px;
+                font-size: 10px;
+                cursor: pointer;
+                transition: background 0.15s;
+            ">Custom...</button>
+            <input type="color" class="hidden-color-input" style="position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;">
+        </div>
+    `;
+}
+
+function handleSwatchColorChange(color) {
+    config.indicatorColor = color;
+    refreshAll();
+    updateJsonPanel();
+}
+// ==========================================================================
+// REFRESH ALL UI
+// --------------------------------------------------------------------------
+// Called after any change that affects the appearance of the table,
+// inspector, and preview.
+// ==========================================================================
+function refreshAll() {
+    renderTable();
+    renderInspector();
+    if (!isPlaying) {
+        if (activePath) {
+            let currP = getObjByPath(activePath);
+            if (currP && currP.state) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(currP.state, 0, bgDim);
+            }
+        } else {
+            renderLights(
+                new Array(config.channels).fill(
+                    config.pwmMin || DEFAULT_PWM_MIN,
+                ),
+                0,
+                false,
+            );
+        }
+    }
+    updateJsonPanel();
 }
 
 document.addEventListener("click", () => {
@@ -1117,9 +1379,15 @@ function ungroup(gIdx) {
 function updateGlobalChannels(val) {
     let n = parseInt(val) || 1;
     config.channels = n;
-    if (!config.colors) config.colors = [];
-    while (config.colors.length < n) config.colors.push(default_color);
-    if (config.colors.length > n) config.colors = config.colors.slice(0, n);
+    // adjust indicatorColors
+    if (!config.indicatorColors) config.indicatorColors = [];
+    while (config.indicatorColors.length < n)
+        config.indicatorColors.push(default_color);
+    if (config.indicatorColors.length > n)
+        config.indicatorColors = config.indicatorColors.slice(0, n);
+    // if global mode, ensure indicatorColor exists
+    if (!config.indicatorColor) config.indicatorColor = default_color;
+
     syncCanvasLayoutLength();
     const fixLength = (p) => {
         while (p.state.length < n) p.state.push(0);
@@ -1132,6 +1400,11 @@ function updateGlobalChannels(val) {
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
     renderTable();
+
+    // also update settings if open
+    if (document.getElementById("settings-modal").style.display === "flex") {
+        updateColorModeControls();
+    }
 }
 
 // Paint, Erase, & Hybrid Tool Selection Controls
@@ -1301,7 +1574,7 @@ function paintTargetCellNode(path, si) {
         }
         if (blockNode) {
             blockNode.title = `${p.state[si]}`;
-            const chanColor = config.colors[si] || default_color;
+            const chanColor = getEffectiveColor(si);
             const isOn = isChannelOn(p.state[si]);
             if (isOn) {
                 blockNode.classList.add("on");
@@ -1426,7 +1699,7 @@ function createPatternRowHTML(p, path, isChild = false) {
             const val = parseFloat(s) || 0;
             const isOn = isChannelOn(val);
             let styleStr = "";
-            const chanColor = config.colors[si] || default_color;
+            const chanColor = getEffectiveColor(si);
             if (isOn) {
                 const opacity = getChannelOpacity(val);
                 styleStr = `style="background: ${chanColor}; opacity: ${opacity};"`;
@@ -1677,7 +1950,7 @@ function updateInspectorChannelVolume(si, val) {
     const blockNode = document.getElementById(`inspector-ch-block-${si}`);
     if (blockNode) {
         blockNode.title = `${num}`;
-        const chanColor = config.colors[si] || default_color;
+        const chanColor = getEffectiveColor(si);
         const isOn = isChannelOn(num);
         if (isOn) {
             blockNode.classList.add("on");
@@ -1913,7 +2186,7 @@ function renderInspector() {
                     si === activeInspectorChannel
                         ? "outline: 2px solid var(--accent); outline-offset: 1px;"
                         : "";
-                const chanColor = config.colors[si] || default_color;
+                const chanColor = getEffectiveColor(si);
                 if (s === -1) {
                     return `<div class="block" id="inspector-ch-block-${si}" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:10px; font-weight:bold; background:#222; ${isActive}" onclick="selectInspectorChannel(${si})">-</div>`;
                 } else {
@@ -1937,7 +2210,7 @@ function renderInspector() {
                     si === activeInspectorChannel
                         ? "outline: 2px solid var(--accent); outline-offset: 1px;"
                         : "";
-                const chanColor = config.colors[si] || default_color;
+                const chanColor = getEffectiveColor(si);
                 const isOn = isChannelOn(val);
                 const opacity = getChannelOpacity(val);
                 if (isOn) {
@@ -2674,13 +2947,10 @@ function handleManualJsonEdit(val) {
         const p = JSON.parse(val);
         if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
             config = p;
-            ensureConfigDefaults();
+            ensureConfigDefaults(); // migrates colors
             config = migrateConfigToPWM(config);
             if (!config._strobe_editor_version)
                 config._strobe_editor_version = "1";
-            if (!config.colors) config.colors = [];
-            while (config.colors.length < config.channels)
-                config.colors.push(default_color);
             syncCanvasLayoutLength();
             document.getElementById("light-bar").innerHTML = "";
             document.getElementById("custom-layout-view").innerHTML = "";
@@ -2916,11 +3186,6 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     const customView = document.getElementById("custom-layout-view");
     if (!bar || !customView) return;
 
-    if (!config.colors) config.colors = [];
-    while (config.colors.length < config.channels) {
-        config.colors.push(default_color);
-    }
-
     // Compute output state with background dimming
     const bgPWM = config.backgroundDimPWM || 0;
     const outputState = state.map((val) => {
@@ -2964,10 +3229,11 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 
             const picker = document.createElement("div");
             picker.className = "channel-color-swatch";
-            picker.dataset.color = config.colors[i] || default_color;
+            const effectiveColor = getEffectiveColor(i);
+            picker.dataset.color = effectiveColor;
             picker.style.cssText =
                 "width: 14px; height: 14px; background-color: " +
-                (config.colors[i] || default_color) +
+                effectiveColor +
                 "; border: 1px solid #ffffff; box-shadow: 0 0 0 1px #444; border-radius: 2px; cursor: pointer; padding:0; margin:0;";
 
             picker.onclick = (e) => {
@@ -2979,6 +3245,18 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
             container.appendChild(l);
             container.appendChild(controls);
             bar.appendChild(container);
+        });
+    } else {
+        // update swatches in existing bar
+        Array.from(bar.children).forEach((container, i) => {
+            const picker = container.querySelector(".channel-color-swatch");
+            if (picker) {
+                const effectiveColor = getEffectiveColor(i);
+                if (picker.dataset.color !== effectiveColor) {
+                    picker.dataset.color = effectiveColor;
+                    picker.style.backgroundColor = effectiveColor;
+                }
+            }
         });
     }
 
@@ -3008,9 +3286,9 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     Array.from(bar.children).forEach((container, i) => {
         const l = container.querySelector(".light");
         const picker = container.querySelector(".channel-color-swatch");
-        if (picker && picker.dataset.color !== config.colors[i]) {
-            picker.dataset.color = config.colors[i];
-            picker.style.backgroundColor = config.colors[i];
+        if (picker && picker.dataset.color !== getEffectiveColor(i)) {
+            picker.dataset.color = getEffectiveColor(i);
+            picker.style.backgroundColor = getEffectiveColor(i);
         }
         if (!l) return;
         if (transitionMs > 0)
@@ -3019,7 +3297,7 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
-        const chanColor = config.colors[i] || default_color;
+        const chanColor = getEffectiveColor(i);
         if (isOn) {
             l.classList.add("on");
             l.style.background = chanColor;
@@ -3054,7 +3332,7 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
-        const chanColor = config.colors[i] || default_color;
+        const chanColor = getEffectiveColor(i);
         if (isOn) {
             el.style.background = chanColor;
             el.style.borderColor = chanColor;
@@ -3103,12 +3381,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             } catch (err) {}
         }
     }
-    ensureConfigDefaults();
+    ensureConfigDefaults(); // migrates colors
     config = migrateConfigToPWM(config);
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
-    if (!config.colors) config.colors = [];
-    while (config.colors.length < config.channels)
-        config.colors.push(default_color);
+    // ensure indicatorColors are correct
+    if (
+        !config.indicatorColors ||
+        config.indicatorColors.length !== config.channels
+    ) {
+        config.indicatorColors = new Array(config.channels).fill(default_color);
+    }
     loadCanvasLayoutData();
     if (historyStack.length === 0 || historyIndex === -1) {
         historyStack = [];
