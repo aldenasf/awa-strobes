@@ -12,6 +12,8 @@
 // GLOBAL STATE
 // ============================================================================
 
+const version = "1";
+
 let config = {
     _strobe_editor_version: "1",
     channels: 10,
@@ -50,10 +52,11 @@ let nodesToggledInCurrentStroke = new Set();
 let inspectorBuffer = null;
 let dirtyFields = new Set();
 
-let historyStack = JSON.parse(localStorage.getItem("strobe_history_v5")) || [];
+let historyStack =
+    JSON.parse(localStorage.getItem(`strobe_history_v${version}`)) || [];
 let historyIndex =
-    localStorage.getItem("strobe_history_index_v5") !== null
-        ? parseInt(localStorage.getItem("strobe_history_index_v5"))
+    localStorage.getItem(`strobe_history_index_v${version}`) !== null
+        ? parseInt(localStorage.getItem(`strobe_history_index_v${version}`))
         : -1;
 const MAX_HISTORY = 50;
 let isUndoRedoAction = false;
@@ -116,8 +119,14 @@ function migratePattern(p) {
 // Tracks snapshots of the whole `config` object so edits can be undone/redone.
 // ==========================================================================
 function saveHistoryToLocal() {
-    localStorage.setItem("strobe_history_v5", JSON.stringify(historyStack));
-    localStorage.setItem("strobe_history_index_v5", historyIndex.toString());
+    localStorage.setItem(
+        `strobe_history_v${version}`,
+        JSON.stringify(historyStack),
+    );
+    localStorage.setItem(
+        `strobe_history_index_v${version}`,
+        historyIndex.toString(),
+    );
 }
 
 function saveState(jsonString) {
@@ -2088,7 +2097,7 @@ function updateJsonPanel() {
         headers: { "Content-Type": "application/json" },
         body: currentJson,
     }).catch((e) => {});
-    localStorage.setItem("strobe_config_v5", currentJson);
+    localStorage.setItem(`strobe_config_v${version}`, currentJson);
     if (
         !isUndoRedoAction &&
         (historyIndex === -1 || currentJson !== historyStack[historyIndex])
@@ -2135,7 +2144,7 @@ const sleep = (ms, sig) =>
 // dragged to arbitrary positions on a canvas.
 // ==========================================================================
 function loadCanvasLayoutData() {
-    let data = localStorage.getItem("strobe_canvas_layout_v5");
+    let data = localStorage.getItem(`strobe_canvas_layout_v${version}`);
     if (data) {
         try {
             canvasLayoutData = JSON.parse(data);
@@ -2163,7 +2172,7 @@ function syncCanvasLayoutLength() {
         canvasLayoutData = canvasLayoutData.slice(0, config.channels);
     }
     localStorage.setItem(
-        "strobe_canvas_layout_v5",
+        `strobe_canvas_layout_v${version}`,
         JSON.stringify(canvasLayoutData),
     );
 }
@@ -2214,7 +2223,7 @@ function setCanvasItemShape(shape) {
     ) {
         canvasLayoutData[activeInspectorChannel].shape = shape;
         localStorage.setItem(
-            "strobe_canvas_layout_v5",
+            `strobe_canvas_layout_v${version}`,
             JSON.stringify(canvasLayoutData),
         );
         if (activePath) {
@@ -2256,7 +2265,7 @@ function handleCanvasNodeMouseDown(e, index) {
     function onMouseUp() {
         draggedChannelIdx = null;
         localStorage.setItem(
-            "strobe_canvas_layout_v5",
+            `strobe_canvas_layout_v${version}`,
             JSON.stringify(canvasLayoutData),
         );
         window.removeEventListener("mousemove", onMouseMove);
@@ -2430,7 +2439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             throw new Error("Local fallback");
         }
     } catch (e) {
-        const savedConfig = localStorage.getItem("strobe_config_v5");
+        const savedConfig = localStorage.getItem(`strobe_config_v${version}`);
         if (savedConfig) {
             try {
                 config = JSON.parse(savedConfig);
