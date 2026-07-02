@@ -1980,10 +1980,6 @@ function toggleBackgroundDim(target = null) {
         updateJsonPanel();
         renderInspector();
         // No preview update needed because default doesn't affect live preview
-        showToast(
-            `Default Background Dim ${config.defaultPattern.backgroundDim ? "enabled" : "disabled"}`,
-            "info",
-        );
         return;
     }
     // Otherwise, toggle on the given pattern (path)
@@ -1997,10 +1993,6 @@ function toggleBackgroundDim(target = null) {
         const bgDim = getBackgroundDimForPath(target);
         renderLights(p.state, 0, bgDim);
     }
-    showToast(
-        `Background Dim ${p.backgroundDim ? "enabled" : "disabled"}`,
-        "info",
-    );
 }
 
 // Helper to update a phase property on the default pattern
