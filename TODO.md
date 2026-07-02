@@ -1,3 +1,7 @@
+========================================
+FEATURES
+========================================
+
 # Hardware
 
 - [x] Background dim (replacement for OFF)
@@ -15,3 +19,10 @@
 - [ ] More visible guides (maybe add a button) (Shift + /)
 - [ ] Display properties like version in the Settings tab or a seperate tab
 - [ ] combine multiple channels into one indicator (for example channel 1: red, 2: white, 3: blue) into one indicator that can display 3 colors but in the circuit still be one indicator
+
+========================================
+BUGS
+========================================
+
+- [ ] Background dim not working on select mode for multiple patterns
+- [x] Background dim should not display toast
