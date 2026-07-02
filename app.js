@@ -13,6 +13,7 @@
 // ============================================================================
 
 const version = "1";
+const default_color = "#ff2a2a";
 
 let config = {
     _strobe_editor_version: "1",
@@ -166,7 +167,7 @@ function applyHistoryState() {
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
     if (!config.colors) config.colors = [];
     while (config.colors.length < config.channels)
-        config.colors.push("#ff2a2a");
+        config.colors.push(default_color);
     syncCanvasLayoutLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
@@ -268,7 +269,7 @@ function openCustomColorPopup(e, context) {
 
     const hiddenPicker = document.getElementById("hidden-native-picker");
     if (typeof context === "number") {
-        hiddenPicker.value = config.colors[context] || "#ff2a2a";
+        hiddenPicker.value = config.colors[context] || default_color;
     }
 
     const rect = e.target.getBoundingClientRect();
@@ -549,7 +550,7 @@ function loadJsonFile(file) {
                     config._strobe_editor_version = "1";
                 if (!config.colors) config.colors = [];
                 while (config.colors.length < config.channels)
-                    config.colors.push("#ff2a2a");
+                    config.colors.push(default_color);
                 syncCanvasLayoutLength();
                 document.getElementById("light-bar").innerHTML = "";
                 document.getElementById("custom-layout-view").innerHTML = "";
@@ -785,7 +786,7 @@ function updateGlobalChannels(val) {
     let n = parseInt(val) || 1;
     config.channels = n;
     if (!config.colors) config.colors = [];
-    while (config.colors.length < n) config.colors.push("#ff2a2a");
+    while (config.colors.length < n) config.colors.push(default_color);
     if (config.colors.length > n) config.colors = config.colors.slice(0, n);
     syncCanvasLayoutLength();
     const fixLength = (p) => {
@@ -941,7 +942,7 @@ function paintTargetCellNode(path, si) {
         }
         if (blockNode) {
             blockNode.title = `${Math.round(p.state[si] * 100)}%`;
-            const chanColor = config.colors[si] || "#ff2a2a";
+            const chanColor = config.colors[si] || default_color;
             if (p.state[si] > 0) {
                 blockNode.classList.add("on");
                 blockNode.style.background = chanColor;
@@ -1064,7 +1065,7 @@ function createPatternRowHTML(p, path, isChild = false) {
         .map((s, si) => {
             const val = parseFloat(s) || 0;
             let styleStr = "";
-            const chanColor = config.colors[si] || "#ff2a2a";
+            const chanColor = config.colors[si] || default_color;
             if (val > 0) {
                 styleStr = `style="background: ${chanColor}; opacity: ${0.2 + val * 0.8};"`;
             }
@@ -1296,7 +1297,7 @@ function updateInspectorChannelVolume(si, val) {
     const blockNode = document.getElementById(`inspector-ch-block-${si}`);
     if (blockNode) {
         blockNode.title = `${Math.round(num * 100)}%`;
-        const chanColor = config.colors[si] || "#ff2a2a";
+        const chanColor = config.colors[si] || default_color;
         if (num > 0) {
             blockNode.classList.add("on");
             blockNode.style.background = chanColor;
@@ -1392,7 +1393,7 @@ function renderInspector() {
                     si === activeInspectorChannel
                         ? "outline: 2px solid var(--accent); outline-offset: 1px;"
                         : "";
-                const chanColor = config.colors[si] || "#ff2a2a";
+                const chanColor = config.colors[si] || default_color;
                 if (s === -1) {
                     return `<div class="block" id="inspector-ch-block-${si}" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:10px; font-weight:bold; background:#222; ${isActive}" onclick="selectInspectorChannel(${si})">-</div>`;
                 } else {
@@ -1414,7 +1415,7 @@ function renderInspector() {
                     si === activeInspectorChannel
                         ? "outline: 2px solid var(--accent); outline-offset: 1px;"
                         : "";
-                const chanColor = config.colors[si] || "#ff2a2a";
+                const chanColor = config.colors[si] || default_color;
                 if (val > 0) {
                     return `<div class="block on" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + val * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${Math.round(val * 100)}%"></div>`;
                 } else {
@@ -2115,7 +2116,7 @@ function handleManualJsonEdit(val) {
                 config._strobe_editor_version = "1";
             if (!config.colors) config.colors = [];
             while (config.colors.length < config.channels)
-                config.colors.push("#ff2a2a");
+                config.colors.push(default_color);
             syncCanvasLayoutLength();
             document.getElementById("light-bar").innerHTML = "";
             document.getElementById("custom-layout-view").innerHTML = "";
@@ -2287,7 +2288,7 @@ function renderLights(state, transitionMs = 0) {
 
     if (!config.colors) config.colors = [];
     while (config.colors.length < config.channels) {
-        config.colors.push("#ff2a2a");
+        config.colors.push(default_color);
     }
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
@@ -2322,10 +2323,10 @@ function renderLights(state, transitionMs = 0) {
 
             const picker = document.createElement("div");
             picker.className = "channel-color-swatch";
-            picker.dataset.color = config.colors[i] || "#ff2a2a";
+            picker.dataset.color = config.colors[i] || default_color;
             picker.style.cssText =
                 "width: 14px; height: 14px; background-color: " +
-                (config.colors[i] || "#ff2a2a") +
+                (config.colors[i] || default_color) +
                 "; border: 1px solid #ffffff; box-shadow: 0 0 0 1px #444; border-radius: 2px; cursor: pointer; padding:0; margin:0;";
 
             picker.onclick = (e) => {
@@ -2375,7 +2376,7 @@ function renderLights(state, transitionMs = 0) {
             l.style.transition = `all ${transitionMs}ms ease-in-out`;
         else l.style.transition = `all 0.05s`;
         const val = parseFloat(state[i]) || 0;
-        const chanColor = config.colors[i] || "#ff2a2a";
+        const chanColor = config.colors[i] || default_color;
         if (val > 0) {
             l.classList.add("on");
             l.style.background = chanColor;
@@ -2408,7 +2409,7 @@ function renderLights(state, transitionMs = 0) {
         else el.style.transition = `all 0.05s, left 0s, top 0s`;
 
         const val = parseFloat(state[i]) || 0;
-        const chanColor = config.colors[i] || "#ff2a2a";
+        const chanColor = config.colors[i] || default_color;
         if (val > 0) {
             el.style.background = chanColor;
             el.style.borderColor = chanColor;
@@ -2449,7 +2450,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
     if (!config.colors) config.colors = [];
     while (config.colors.length < config.channels)
-        config.colors.push("#ff2a2a");
+        config.colors.push(default_color);
     loadCanvasLayoutData();
     if (historyStack.length === 0 || historyIndex === -1) {
         historyStack = [];
