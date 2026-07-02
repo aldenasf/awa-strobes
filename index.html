@@ -142,6 +142,23 @@
                 </div>
             </div>
 
+            <!-- NEW: Background Dim PWM -->
+            <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
+                <div class="inspector-label" style="color: var(--text);">Background Dim</div>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
+                        PWM:
+                        <input type="number" id="settings-background-dim-pwm" min="0" max="1023" step="1"
+                            style="width: 70px; text-align: center;" oninput="updateBackgroundDimPWM(this.value)">
+                    </label>
+                </div>
+                <div style="margin-top: 10px;">
+                    <div style="font-size: 10px; color: #666; margin-bottom: 6px;">Preview (OFF / Background Dim / ON):
+                    </div>
+                    <div id="bg-dim-preview" style="display: flex; gap: 20px; align-items: center;"></div>
+                </div>
+            </div>
+
             <div style="text-align: right; margin-top: 25px;">
                 <button onclick="toggleSettingsModal()">CLOSE</button>
             </div>
@@ -218,11 +235,7 @@
                             <button class="btn-compact" style="padding:4px 8px; font-weight:bold;"
                                 onclick="toggleBrushPresetsMenu(event)" title="Brush Presets">...</button>
                             <div class="brush-popover" id="brush-presets-popup">
-                                <button onclick="selectBrushPreset(102)">102 (10%)</button>
-                                <button onclick="selectBrushPreset(256)">256 (25%)</button>
-                                <button onclick="selectBrushPreset(512)">512 (50%)</button>
-                                <button onclick="selectBrushPreset(767)">767 (75%)</button>
-                                <button onclick="selectBrushPreset(1023)">1023 (MAX)</button>
+                                <!-- populated dynamically -->
                             </div>
                         </div>
                     </div>

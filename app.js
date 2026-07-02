@@ -25,6 +25,7 @@ let config = {
     pwmMin: DEFAULT_PWM_MIN,
     pwmMax: DEFAULT_PWM_MAX,
     indicatorOffAtMin: false,
+    backgroundDimPWM: 0, // new global setting
 };
 let appMode = "edit";
 let showSteps = true;
@@ -117,6 +118,8 @@ function migratePattern(p) {
         delete p.flicker;
         delete p.fade;
     }
+    // ensure backgroundDim exists
+    if (p.backgroundDim === undefined) p.backgroundDim = false;
     return p;
 }
 
@@ -168,18 +171,29 @@ function migrateConfigToPWM(cfg) {
 }
 
 // ==========================================================================
-// CONFIG DEFAULTS (PWM range & indicator behaviour)
+// CONFIG DEFAULTS (PWM range, indicator behaviour, background dim)
 // ==========================================================================
 function ensureConfigDefaults() {
     if (config.pwmMin === undefined) config.pwmMin = DEFAULT_PWM_MIN;
     if (config.pwmMax === undefined) config.pwmMax = DEFAULT_PWM_MAX;
     if (config.indicatorOffAtMin === undefined)
         config.indicatorOffAtMin = false;
+    if (config.backgroundDimPWM === undefined) config.backgroundDimPWM = 0;
     // clamp min < max
     if (config.pwmMin >= config.pwmMax) {
         config.pwmMin = DEFAULT_PWM_MIN;
         config.pwmMax = DEFAULT_PWM_MAX;
     }
+    // ensure each pattern has backgroundDim
+    (config.patterns || []).forEach((item) => {
+        if (item.type === "group") {
+            item.patterns.forEach((p) => {
+                if (p.backgroundDim === undefined) p.backgroundDim = false;
+            });
+        } else {
+            if (item.backgroundDim === undefined) item.backgroundDim = false;
+        }
+    });
 }
 
 function isChannelOn(val) {
@@ -274,8 +288,11 @@ function applyHistoryState() {
     syncCanvasLayoutLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
+    const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
         new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        0,
+        bgDim,
     );
     document.getElementById("global-channels").value = config.channels;
     renderTable();
@@ -393,13 +410,17 @@ function selectCustomPopupColor(val) {
         if (!isPlaying) {
             if (activePath) {
                 let currP = getObjByPath(activePath);
-                if (currP && currP.state) renderLights(currP.state, 0);
+                if (currP && currP.state) {
+                    const bgDim = getBackgroundDimForPath(activePath);
+                    renderLights(currP.state, 0, bgDim);
+                }
             } else {
                 renderLights(
                     new Array(config.channels).fill(
                         config.pwmMin || DEFAULT_PWM_MIN,
                     ),
                     0,
+                    false,
                 );
             }
         }
@@ -666,11 +687,13 @@ function loadJsonFile(file) {
                 syncCanvasLayoutLength();
                 document.getElementById("light-bar").innerHTML = "";
                 document.getElementById("custom-layout-view").innerHTML = "";
+                const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(
                     new Array(config.channels).fill(
                         config.pwmMin || DEFAULT_PWM_MIN,
                     ),
                     0,
+                    bgDim,
                 );
                 document.getElementById("global-channels").value =
                     config.channels;
@@ -730,6 +753,9 @@ function toggleSettingsModal() {
             config.pwmMax || DEFAULT_PWM_MAX;
         document.getElementById("settings-indicator-off-min").checked =
             !!config.indicatorOffAtMin;
+        document.getElementById("settings-background-dim-pwm").value =
+            config.backgroundDimPWM || 0;
+        updateBackgroundDimPreview();
     }
 }
 
@@ -765,17 +791,22 @@ function updatePwmRange() {
     if (!isPlaying) {
         if (activePath) {
             let currP = getObjByPath(activePath);
-            if (currP && currP.state) renderLights(currP.state, 0);
+            if (currP && currP.state) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(currP.state, 0, bgDim);
+            }
         } else {
             renderLights(
                 new Array(config.channels).fill(
                     config.pwmMin || DEFAULT_PWM_MIN,
                 ),
                 0,
+                false,
             );
         }
     }
     updateJsonPanel();
+    updateBackgroundDimPreview();
     showToast("PWM range updated", "success");
 }
 
@@ -786,19 +817,96 @@ function toggleIndicatorOffAtMin() {
     if (!isPlaying) {
         if (activePath) {
             let currP = getObjByPath(activePath);
-            if (currP && currP.state) renderLights(currP.state, 0);
+            if (currP && currP.state) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(currP.state, 0, bgDim);
+            }
         } else {
             renderLights(
                 new Array(config.channels).fill(
                     config.pwmMin || DEFAULT_PWM_MIN,
                 ),
                 0,
+                false,
             );
         }
     }
     renderTable();
     updateJsonPanel();
+    updateBackgroundDimPreview();
     showToast("Indicator behaviour updated", "success");
+}
+
+function updateBackgroundDimPWM(val) {
+    let parsed = parseInt(val);
+    if (isNaN(parsed) || parsed < 0) parsed = 0;
+    if (parsed > (config.pwmMax || DEFAULT_PWM_MAX))
+        parsed = config.pwmMax || DEFAULT_PWM_MAX;
+    config.backgroundDimPWM = parsed;
+    updateJsonPanel();
+    // Update preview if active pattern
+    if (!isPlaying) {
+        if (activePath) {
+            let currP = getObjByPath(activePath);
+            if (currP && currP.state) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(currP.state, 0, bgDim);
+            }
+        } else {
+            renderLights(
+                new Array(config.channels).fill(
+                    config.pwmMin || DEFAULT_PWM_MIN,
+                ),
+                0,
+                false,
+            );
+        }
+    }
+    // Also update the settings preview
+    updateBackgroundDimPreview();
+    showToast("Background Dim PWM updated", "success");
+}
+
+function updateBackgroundDimPreview() {
+    const previewContainer = document.getElementById("bg-dim-preview");
+    if (!previewContainer) return;
+    const bgPWM = config.backgroundDimPWM || 0;
+    const maxPWM = config.pwmMax || DEFAULT_PWM_MAX;
+    const minPWM = config.pwmMin || DEFAULT_PWM_MIN;
+    // Three states: OFF (0), Background Dim (bgPWM), ON (maxPWM)
+    const states = [0, bgPWM, maxPWM];
+    const labels = ["OFF", "BG Dim", "ON"];
+    previewContainer.innerHTML = "";
+    states.forEach((val, idx) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "flex";
+        wrapper.style.flexDirection = "column";
+        wrapper.style.alignItems = "center";
+        wrapper.style.gap = "2px";
+        const dot = document.createElement("div");
+        dot.className = "bg-preview-dot";
+        const isOn = isChannelOn(val);
+        const opacity = getChannelOpacity(val);
+        const color = config.colors[0] || default_color; // use first channel color
+        if (isOn) {
+            dot.style.background = color;
+            dot.style.opacity = opacity;
+            dot.style.boxShadow = `0 0 6px ${color}`;
+            dot.style.borderColor = color;
+        } else {
+            dot.style.background = "#222";
+            dot.style.opacity = "1";
+            dot.style.boxShadow = "none";
+            dot.style.borderColor = "var(--border)";
+        }
+        const label = document.createElement("span");
+        label.style.fontSize = "8px";
+        label.style.color = "#888";
+        label.textContent = labels[idx];
+        wrapper.appendChild(dot);
+        wrapper.appendChild(label);
+        previewContainer.appendChild(wrapper);
+    });
 }
 
 document.addEventListener("click", () => {
@@ -900,6 +1008,12 @@ function getArrByPath(path) {
 function getIdxByPath(path) {
     let parts = path.split("-");
     return parseInt(parts[parts.length - 1]);
+}
+
+function getBackgroundDimForPath(path) {
+    if (!path) return false;
+    let p = getObjByPath(path);
+    return p && p.backgroundDim ? true : false;
 }
 
 // ==========================================================================
@@ -1132,7 +1246,10 @@ function paintTargetCellNode(path, si) {
     }
 
     renderTable();
-    if (!isPlaying) renderLights(p.state, 0);
+    if (!isPlaying) {
+        const bgDim = getBackgroundDimForPath(path);
+        renderLights(p.state, 0, bgDim);
+    }
     updateJsonPanel();
     if (activePath === path) {
         const rangeInput = document.getElementById("inspector-dimmer-range");
@@ -1448,13 +1565,17 @@ function selectInspectorChannel(si) {
 
         if (activePath) {
             let currP = getObjByPath(activePath);
-            if (currP && currP.state) renderLights(currP.state, 0);
+            if (currP && currP.state) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(currP.state, 0, bgDim);
+            }
         } else {
             renderLights(
                 new Array(config.channels).fill(
                     config.pwmMin || DEFAULT_PWM_MIN,
                 ),
                 0,
+                false,
             );
         }
     }
@@ -1492,7 +1613,10 @@ function updateInspectorChannelVolume(si, val) {
         if (p) {
             p.state[si] = num;
             renderTable(true);
-            if (!isPlaying) renderLights(p.state, 0);
+            if (!isPlaying) {
+                const bgDim = getBackgroundDimForPath(activePath);
+                renderLights(p.state, 0, bgDim);
+            }
             updateJsonPanel();
         }
     }
@@ -1538,6 +1662,24 @@ function resetInspectorChannelToUnchanged(si) {
         inspectorBuffer.state[si] = -1;
         renderInspector();
     }
+}
+
+function toggleBackgroundDim() {
+    if (!activePath) return;
+    let p = getObjByPath(activePath);
+    if (!p || p.type === "group") return;
+    p.backgroundDim = !p.backgroundDim;
+    updateJsonPanel();
+    renderTable();
+    renderInspector();
+    if (!isPlaying) {
+        const bgDim = getBackgroundDimForPath(activePath);
+        renderLights(p.state, 0, bgDim);
+    }
+    showToast(
+        `Background Dim ${p.backgroundDim ? "enabled" : "disabled"}`,
+        "info",
+    );
 }
 
 function renderInspector() {
@@ -1685,6 +1827,24 @@ function renderInspector() {
                 </div>
             `;
 
+    // Background Dim checkbox (only for non‑group patterns)
+    let bgDimHtml = "";
+    if (p && p.type !== "group") {
+        const bgDimEnabled = p.backgroundDim || false;
+        bgDimHtml = `
+                <div class="inspector-section" style="margin-top: 12px;">
+                    <div class="inspector-label">Background Dim</div>
+                    <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
+                        <input type="checkbox" ${bgDimEnabled ? "checked" : ""} onchange="toggleBackgroundDim()">
+                        Enabled
+                    </label>
+                    <div style="font-size: 10px; color: #666; margin-top: 4px;">
+                        Global PWM: ${config.backgroundDimPWM || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
+                    </div>
+                </div>
+            `;
+    }
+
     let hasStateChanges =
         selectedPaths.size > 0 &&
         inspectorBuffer &&
@@ -1709,6 +1869,8 @@ function renderInspector() {
                     </div>
                     ${dimmerControlHtml}
                 </div>
+
+                ${bgDimHtml}
 
                 <div class="inspector-section">
                     <div class="inspector-label">1. In-Transition</div>
@@ -1960,13 +2122,14 @@ async function playSinglePattern(p, path) {
     highlightPlayingRow(path);
     if (!p.phases) p = migratePattern(p);
     let timePlayed = false;
+    const bgDimEnabled = p.backgroundDim || false;
 
     if (p.phases.in.type === "fade" && p.phases.in.duration > 0) {
-        renderLights(p.state, p.phases.in.duration);
+        renderLights(p.state, p.phases.in.duration, bgDimEnabled);
         await sleep(p.phases.in.duration, abortController.signal);
         timePlayed = true;
     } else if (p.phases.in.type === "steady" && p.phases.in.duration > 0) {
-        renderLights(p.state, 0);
+        renderLights(p.state, 0, bgDimEnabled);
         await sleep(p.phases.in.duration, abortController.signal);
         timePlayed = true;
     }
@@ -1983,6 +2146,7 @@ async function playSinglePattern(p, path) {
                           config.pwmMin || DEFAULT_PWM_MIN,
                       ),
                 0,
+                bgDimEnabled,
             );
             await sleep(step, abortController.signal);
         }
@@ -1993,11 +2157,12 @@ async function playSinglePattern(p, path) {
         renderLights(
             new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
             p.phases.out.duration,
+            bgDimEnabled,
         );
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
     } else if (p.phases.out.type === "steady" && p.phases.out.duration > 0) {
-        renderLights(p.state, 0);
+        renderLights(p.state, 0, bgDimEnabled);
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
     }
@@ -2012,9 +2177,11 @@ function stopStrobe() {
     btn.className = "play-btn";
     document.getElementById("playback-text").innerText = "PLAY";
     document.getElementById("playback-icon").src = "/assets/play.svg";
+    const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
         new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
         0,
+        bgDim,
     );
 }
 
@@ -2172,6 +2339,7 @@ function addPattern() {
         state: new Array(config.channels).fill(
             config.pwmMin || DEFAULT_PWM_MIN,
         ),
+        backgroundDim: false,
         phases: {
             in: { type: "none", duration: 0 },
             anim: { type: "none", amount: 0, duration: 0 },
@@ -2366,11 +2534,13 @@ function handleManualJsonEdit(val) {
             syncCanvasLayoutLength();
             document.getElementById("light-bar").innerHTML = "";
             document.getElementById("custom-layout-view").innerHTML = "";
+            const bgDim = getBackgroundDimForPath(activePath);
             renderLights(
                 new Array(config.channels).fill(
                     config.pwmMin || DEFAULT_PWM_MIN,
                 ),
                 0,
+                bgDim,
             );
             document.getElementById("global-channels").value = config.channels;
             activePath = null;
@@ -2465,11 +2635,15 @@ function setPreviewMode(mode) {
 
     if (activePath) {
         let currP = getObjByPath(activePath);
-        if (currP && currP.state) renderLights(currP.state, 0);
+        if (currP && currP.state) {
+            const bgDim = getBackgroundDimForPath(activePath);
+            renderLights(currP.state, 0, bgDim);
+        }
     } else {
         renderLights(
             new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
             0,
+            false,
         );
     }
 }
@@ -2506,6 +2680,7 @@ function setCanvasItemShape(shape) {
         isPlaying
             ? currentLightState
             : new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        false,
     );
 }
 
@@ -2578,6 +2753,7 @@ function resetIndicatorPositions() {
         isPlaying
             ? currentLightState
             : new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        false,
     );
     showToast("Indicator positions reset", "success");
 }
@@ -2585,7 +2761,7 @@ function resetIndicatorPositions() {
 // LIGHT PREVIEW RENDERING
 // Draws the current channel state onto the bar/canvas preview.
 // ==========================================================================
-function renderLights(state, transitionMs = 0) {
+function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     const bar = document.getElementById("light-bar");
     const customView = document.getElementById("custom-layout-view");
     if (!bar || !customView) return;
@@ -2594,11 +2770,22 @@ function renderLights(state, transitionMs = 0) {
     while (config.colors.length < config.channels) {
         config.colors.push(default_color);
     }
+
+    // Compute output state with background dimming
+    const bgPWM = config.backgroundDimPWM || 0;
+    const outputState = state.map((val) => {
+        const num = parseFloat(val) || 0;
+        if (num === 0 && bgDimEnabled) {
+            return bgPWM;
+        }
+        return num;
+    });
+
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
             JSON.stringify({
                 type: "LIVE",
-                state: state,
+                state: outputState,
                 transition: transitionMs,
             }),
         );
@@ -2679,7 +2866,7 @@ function renderLights(state, transitionMs = 0) {
         if (transitionMs > 0)
             l.style.transition = `all ${transitionMs}ms ease-in-out`;
         else l.style.transition = `all 0.05s`;
-        const val = parseFloat(state[i]) || 0;
+        const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
         const chanColor = config.colors[i] || default_color;
@@ -2714,7 +2901,7 @@ function renderLights(state, transitionMs = 0) {
             el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;
         else el.style.transition = `all 0.05s, left 0s, top 0s`;
 
-        const val = parseFloat(state[i]) || 0;
+        const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
         const chanColor = config.colors[i] || default_color;
@@ -2768,9 +2955,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         saveState(JSON.stringify(config));
     }
     document.getElementById("global-channels").value = config.channels;
+    const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
         new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
         0,
+        bgDim,
     );
     renderTable();
     renderInspector();

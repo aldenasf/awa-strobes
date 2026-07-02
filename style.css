@@ -741,3 +741,13 @@ tr.group-header {
     background: #444;
     color: #fff;
 }
+
+/* Background Dim preview dots */
+.bg-preview-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    transition: all 0.1s ease;
+    background: #222;
+}
