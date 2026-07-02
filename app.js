@@ -60,6 +60,7 @@ let draggedChannelIdx = null;
 // Painting Tools Dynamic State Settings
 let activeTool = "hybrid";
 let brushBrightness = DEFAULT_PWM_MAX;
+// brushIncrement is now stored in localStorage (user preference)
 let brushIncrement = 100;
 let isPaintingActive = false;
 let nodesToggledInCurrentStroke = new Set();
@@ -773,8 +774,7 @@ function toggleSettingsModal() {
     const m = document.getElementById("settings-modal");
     m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
-        document.getElementById("settings-brush-increment").value =
-            brushIncrement;
+        // Populate project settings
         document.getElementById("settings-pwm-min").value =
             config.pwmMin || DEFAULT_PWM_MIN;
         document.getElementById("settings-pwm-max").value =
@@ -784,6 +784,10 @@ function toggleSettingsModal() {
         document.getElementById("settings-background-dim-pwm").value =
             config.backgroundDimPWM || 0;
         updateBackgroundDimPreview();
+
+        // Populate user preferences
+        document.getElementById("settings-brush-increment").value =
+            brushIncrement;
     }
 }
 
@@ -791,6 +795,8 @@ function updateBrushIncrementSetting(val) {
     let parsed = parseFloat(val);
     if (isNaN(parsed) || parsed <= 0) return;
     brushIncrement = Math.round(Math.min(1023, Math.max(1, parsed)));
+    // Save to localStorage
+    localStorage.setItem("strobe_brush_increment", brushIncrement);
 }
 
 function updatePwmRange() {
@@ -3071,6 +3077,17 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 // once the DOM is ready.
 // ==========================================================================
 document.addEventListener("DOMContentLoaded", async () => {
+    // Load user preferences from localStorage
+    const savedIncrement = localStorage.getItem("strobe_brush_increment");
+    if (savedIncrement !== null) {
+        brushIncrement = Math.round(
+            Math.min(1023, Math.max(1, parseFloat(savedIncrement))),
+        );
+    } else {
+        brushIncrement = 100;
+        localStorage.setItem("strobe_brush_increment", brushIncrement);
+    }
+
     try {
         const response = await fetch("/config.json");
         if (response.ok) {

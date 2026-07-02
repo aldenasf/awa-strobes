@@ -106,56 +106,77 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3
                 style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
-                Preferences & Settings</h3>
+                Settings
+            </h3>
 
-            <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
-                <div class="inspector-label" style="color: var(--text);">Paint Tool Configuration</div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                    <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (PWM):</span>
-                    <input type="number" id="settings-brush-increment" min="1" max="1023" step="1" value="100"
-                        oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
+            <!-- Project Settings -->
+            <div style="margin-bottom: 20px;">
+                <div
+                    style="font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 6px;">
+                    Project Settings
                 </div>
-            </div>
 
-            <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
-                <div class="inspector-label" style="color: var(--text);">PWM Range</div>
-                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                    <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
-                        Min:
-                        <input type="number" id="settings-pwm-min" min="0" max="1023" step="1"
-                            style="width: 60px; text-align: center;">
-                    </label>
-                    <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
-                        Max:
-                        <input type="number" id="settings-pwm-max" min="0" max="1023" step="1"
-                            style="width: 60px; text-align: center;">
-                    </label>
-                    <button class="btn-compact" style="background: var(--accent);"
-                        onclick="updatePwmRange()">Apply</button>
-                </div>
-                <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
-                    <label
-                        style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" id="settings-indicator-off-min" onchange="toggleIndicatorOffAtMin()">
-                        Indicator fully off at minimum value
-                    </label>
-                </div>
-            </div>
-
-            <!-- NEW: Background Dim PWM -->
-            <div class="inspector-section" style="background: #222; margin-bottom: 20px;">
-                <div class="inspector-label" style="color: var(--text);">Background Dim</div>
-                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                    <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
-                        PWM:
-                        <input type="number" id="settings-background-dim-pwm" min="0" max="1023" step="1"
-                            style="width: 70px; text-align: center;" oninput="updateBackgroundDimPWM(this.value)">
-                    </label>
-                </div>
-                <div style="margin-top: 10px;">
-                    <div style="font-size: 10px; color: #666; margin-bottom: 6px;">Preview (OFF / Background Dim / ON):
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <div class="inspector-label" style="color: var(--text);">PWM Range</div>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
+                            Min:
+                            <input type="number" id="settings-pwm-min" min="0" max="1023" step="1"
+                                style="width: 60px; text-align: center;">
+                        </label>
+                        <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
+                            Max:
+                            <input type="number" id="settings-pwm-max" min="0" max="1023" step="1"
+                                style="width: 60px; text-align: center;">
+                        </label>
+                        <button class="btn-compact" style="background: var(--accent);"
+                            onclick="updatePwmRange()">Apply</button>
                     </div>
-                    <div id="bg-dim-preview" style="display: flex; gap: 20px; align-items: center;"></div>
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                        <label
+                            style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" id="settings-indicator-off-min" onchange="toggleIndicatorOffAtMin()">
+                            Indicator fully off at minimum value
+                        </label>
+                    </div>
+                </div>
+
+                <div class="inspector-section"
+                    style="background: #222; margin-bottom: 15px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
+                    <div>
+
+                        <div class="inspector-label" style="color: var(--text);">Background Dim</div>
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
+                                PWM:
+                                <input type="number" id="settings-background-dim-pwm" min="0" max="1023" step="1"
+                                    style="width: 70px; text-align: center;"
+                                    oninput="updateBackgroundDimPWM(this.value)">
+                            </label>
+                        </div>
+                    </div>
+                    <div style="margin-right: 2rem;">
+                        <div id="bg-dim-preview" style="display: flex; gap: 20px; align-items: center;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Preferences -->
+            <div style="margin-bottom: 20px;">
+                <div
+                    style="font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 6px;">
+                    Preferences
+                </div>
+
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <div class="inspector-label" style="color: var(--text);">Paint Tool</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;  margin-top: 10px;">
+                        <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (PWM):</span>
+                        <input type="number" id="settings-brush-increment" min="1" max="1023" step="1" value="100"
+                            oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-top: 6px;">This value is stored locally and not
+                        saved in the project.</div>
                 </div>
             </div>
 
