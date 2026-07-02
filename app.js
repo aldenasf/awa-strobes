@@ -3227,36 +3227,10 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
             const numLabel = document.createElement("span");
             numLabel.innerText = i + 1;
 
-            const picker = document.createElement("div");
-            picker.className = "channel-color-swatch";
-            const effectiveColor = getEffectiveColor(i);
-            picker.dataset.color = effectiveColor;
-            picker.style.cssText =
-                "width: 14px; height: 14px; background-color: " +
-                effectiveColor +
-                "; border: 1px solid #ffffff; box-shadow: 0 0 0 1px #444; border-radius: 2px; cursor: pointer; padding:0; margin:0;";
-
-            picker.onclick = (e) => {
-                openCustomColorPopup(e, i);
-            };
-
             controls.appendChild(numLabel);
-            controls.appendChild(picker);
             container.appendChild(l);
             container.appendChild(controls);
             bar.appendChild(container);
-        });
-    } else {
-        // update swatches in existing bar
-        Array.from(bar.children).forEach((container, i) => {
-            const picker = container.querySelector(".channel-color-swatch");
-            if (picker) {
-                const effectiveColor = getEffectiveColor(i);
-                if (picker.dataset.color !== effectiveColor) {
-                    picker.dataset.color = effectiveColor;
-                    picker.style.backgroundColor = effectiveColor;
-                }
-            }
         });
     }
 
@@ -3285,11 +3259,6 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 
     Array.from(bar.children).forEach((container, i) => {
         const l = container.querySelector(".light");
-        const picker = container.querySelector(".channel-color-swatch");
-        if (picker && picker.dataset.color !== getEffectiveColor(i)) {
-            picker.dataset.color = getEffectiveColor(i);
-            picker.style.backgroundColor = getEffectiveColor(i);
-        }
         if (!l) return;
         if (transitionMs > 0)
             l.style.transition = `all ${transitionMs}ms ease-in-out`;
