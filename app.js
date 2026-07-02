@@ -14,6 +14,11 @@
 
 const version = "1";
 const default_color = "#ff2a2a";
+// Channel brightness is stored as a native ESP32 PWM duty value (0-1023),
+// not a normalized 0.0-1.0 float. These are the only places that range is
+// hard-coded; everything else should read PWM_MIN / PWM_MAX.
+const PWM_MIN = 500;
+const PWM_MAX = 1023;
 
 let config = {
     _strobe_editor_version: "1",
@@ -45,8 +50,8 @@ let draggedChannelIdx = null;
 
 // Painting Tools Dynamic State Settings
 let activeTool = "hybrid";
-let brushBrightness = 1;
-let brushIncrement = 0.1;
+let brushBrightness = PWM_MAX;
+let brushIncrement = 100;
 let isPaintingActive = false;
 let nodesToggledInCurrentStroke = new Set();
 
@@ -116,6 +121,52 @@ function migratePattern(p) {
 }
 
 // ==========================================================================
+// PWM VALUE MIGRATION
+// Older config files stored channel brightness as a normalized 0.0-1.0
+// float. The editor now works exclusively in native ESP32 PWM duty values
+// (0-1023). When a config is loaded, we look at every state value: if they
+// are ALL within 0.0-1.0, we assume it's the legacy normalized format and
+// scale it up to PWM. Otherwise we assume it's already PWM and leave it
+// untouched.
+// ==========================================================================
+function collectStateValues(patterns, out = []) {
+    (patterns || []).forEach((p) => {
+        if (p.type === "group") {
+            collectStateValues(p.patterns, out);
+        } else if (Array.isArray(p.state)) {
+            p.state.forEach((v) => {
+                const n = parseFloat(v);
+                if (!isNaN(n)) out.push(n);
+            });
+        }
+    });
+    return out;
+}
+
+function scaleStatesToPWM(patterns) {
+    (patterns || []).forEach((p) => {
+        if (p.type === "group") {
+            scaleStatesToPWM(p.patterns);
+        } else if (Array.isArray(p.state)) {
+            p.state = p.state.map((v) => {
+                const n = parseFloat(v) || 0;
+                return Math.round(n * PWM_MAX);
+            });
+        }
+    });
+}
+
+function migrateConfigToPWM(cfg) {
+    const values = collectStateValues(cfg.patterns);
+    const isLegacyNormalized =
+        values.length > 0 && values.every((v) => v >= 0 && v <= 1);
+    if (isLegacyNormalized) {
+        scaleStatesToPWM(cfg.patterns);
+    }
+    return cfg;
+}
+
+// ==========================================================================
 // UNDO / REDO HISTORY (CONFIG)
 // Tracks snapshots of the whole `config` object so edits can be undone/redone.
 // ==========================================================================
@@ -171,7 +222,7 @@ function applyHistoryState() {
     syncCanvasLayoutLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
-    renderLights(new Array(config.channels).fill(0));
+    renderLights(new Array(config.channels).fill(PWM_MIN));
     document.getElementById("global-channels").value = config.channels;
     renderTable();
     renderInspector();
@@ -290,7 +341,7 @@ function selectCustomPopupColor(val) {
                 let currP = getObjByPath(activePath);
                 if (currP && currP.state) renderLights(currP.state, 0);
             } else {
-                renderLights(new Array(config.channels).fill(0), 0);
+                renderLights(new Array(config.channels).fill(PWM_MIN), 0);
             }
         }
     }
@@ -545,7 +596,7 @@ function loadJsonFile(file) {
                 typeof p.channels === "number" &&
                 Array.isArray(p.patterns)
             ) {
-                config = p;
+                config = migrateConfigToPWM(p);
                 if (!config._strobe_editor_version)
                     config._strobe_editor_version = "1";
                 if (!config.colors) config.colors = [];
@@ -554,7 +605,7 @@ function loadJsonFile(file) {
                 syncCanvasLayoutLength();
                 document.getElementById("light-bar").innerHTML = "";
                 document.getElementById("custom-layout-view").innerHTML = "";
-                renderLights(new Array(config.channels).fill(0), 0);
+                renderLights(new Array(config.channels).fill(PWM_MIN), 0);
                 document.getElementById("global-channels").value =
                     config.channels;
                 activePath = null;
@@ -605,16 +656,15 @@ function toggleSettingsModal() {
     const m = document.getElementById("settings-modal");
     m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
-        document.getElementById("settings-brush-increment").value = Math.round(
-            brushIncrement * 100,
-        );
+        document.getElementById("settings-brush-increment").value =
+            brushIncrement;
     }
 }
 
 function updateBrushIncrementSetting(val) {
     let parsed = parseFloat(val);
     if (isNaN(parsed) || parsed <= 0) return;
-    brushIncrement = Math.min(100, Math.max(1, parsed)) / 100;
+    brushIncrement = Math.round(Math.min(PWM_MAX, Math.max(1, parsed)));
 }
 
 document.addEventListener("click", () => {
@@ -834,11 +884,11 @@ function setActiveTool(tool) {
 function syncBrushWidgetStyles() {
     const inputField = document.getElementById("global-brush-val");
     if (inputField && document.activeElement !== inputField) {
-        inputField.value = Math.round(brushBrightness * 100);
+        inputField.value = brushBrightness;
     }
     const scrollBox = document.getElementById("paint-tool-scroll-box");
     if (scrollBox) {
-        scrollBox.style.backgroundColor = `rgba(255, 42, 42, ${brushBrightness})`;
+        scrollBox.style.backgroundColor = `rgba(255, 42, 42, ${brushBrightness / PWM_MAX})`;
     }
 }
 
@@ -846,8 +896,8 @@ function handleBrushWidgetWheel(event) {
     if (activeTool === "erase") return;
     event.preventDefault();
     let step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
-    let next = Math.min(1.0, Math.max(0.0, brushBrightness + step));
-    brushBrightness = Math.round(next * 100) / 100;
+    let next = Math.min(PWM_MAX, Math.max(PWM_MIN, brushBrightness + step));
+    brushBrightness = Math.round(next);
     syncBrushWidgetStyles();
     renderInspector();
 }
@@ -856,8 +906,7 @@ function handleManualBrushInput(val) {
     if (activeTool === "erase") return;
     let parsed = parseFloat(val);
     if (isNaN(parsed)) return;
-    let target = Math.min(100, Math.max(0, parsed)) / 100;
-    brushBrightness = Math.round(target * 100) / 100;
+    brushBrightness = Math.round(Math.min(PWM_MAX, Math.max(PWM_MIN, parsed)));
     syncBrushWidgetStyles();
     renderInspector();
 }
@@ -907,14 +956,12 @@ function paintTargetCellNode(path, si) {
     if (activeTool === "paint") {
         p.state[si] = brushBrightness;
     } else if (activeTool === "erase") {
-        p.state[si] = 0;
+        p.state[si] = PWM_MIN;
     } else if (activeTool === "hybrid") {
-        let current = parseFloat(p.state[si]) || 0;
+        let current = Math.round(parseFloat(p.state[si]) || 0);
         if (current > 0) {
-            if (
-                Math.round(current * 100) === Math.round(brushBrightness * 100)
-            ) {
-                p.state[si] = 0;
+            if (current === brushBrightness) {
+                p.state[si] = PWM_MIN;
             } else {
                 p.state[si] = brushBrightness;
             }
@@ -938,15 +985,15 @@ function paintTargetCellNode(path, si) {
             if (numberInput && numberInput !== document.activeElement)
                 numberInput.value = p.state[si];
             if (labelNode)
-                labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${Math.round(p.state[si] * 100)}%)</span>`;
+                labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${p.state[si]})</span>`;
         }
         if (blockNode) {
-            blockNode.title = `${Math.round(p.state[si] * 100)}%`;
+            blockNode.title = `${p.state[si]}`;
             const chanColor = config.colors[si] || default_color;
             if (p.state[si] > 0) {
                 blockNode.classList.add("on");
                 blockNode.style.background = chanColor;
-                blockNode.style.opacity = 0.2 + p.state[si] * 0.8;
+                blockNode.style.opacity = 0.2 + (p.state[si] / PWM_MAX) * 0.8;
             } else {
                 blockNode.classList.remove("on");
                 blockNode.style.background = "#222";
@@ -1067,9 +1114,9 @@ function createPatternRowHTML(p, path, isChild = false) {
             let styleStr = "";
             const chanColor = config.colors[si] || default_color;
             if (val > 0) {
-                styleStr = `style="background: ${chanColor}; opacity: ${0.2 + val * 0.8};"`;
+                styleStr = `style="background: ${chanColor}; opacity: ${0.2 + (val / PWM_MAX) * 0.8};"`;
             }
-            return `<div class="block ${val > 0 ? "on" : ""}" ${styleStr} onmousedown="event.stopPropagation(); activePath='${path}'; startPaintStrokeDrag('${path}', ${si})" onmouseenter="enterPaintStrokeDrag('${path}', ${si})" title="${Math.round(val * 100)}%"></div>`;
+            return `<div class="block ${val > 0 ? "on" : ""}" ${styleStr} onmousedown="event.stopPropagation(); activePath='${path}'; startPaintStrokeDrag('${path}', ${si})" onmouseenter="enterPaintStrokeDrag('${path}', ${si})" title="${val}"></div>`;
         })
         .join("")}</div>`;
 
@@ -1239,7 +1286,7 @@ function selectInspectorChannel(si) {
             let currP = getObjByPath(activePath);
             if (currP && currP.state) renderLights(currP.state, 0);
         } else {
-            renderLights(new Array(config.channels).fill(0), 0);
+            renderLights(new Array(config.channels).fill(PWM_MIN), 0);
         }
     }
 }
@@ -1248,9 +1295,9 @@ function updateInspectorChannelVolume(si, val) {
     if (si === -1) return;
     let num = parseFloat(val);
     if (isNaN(num)) num = 0;
-    if (num < 0) num = 0;
-    if (num > 1) num = 1;
-    num = Math.round(num * 100) / 100;
+    if (num < PWM_MIN) num = PWM_MIN;
+    if (num > PWM_MAX) num = PWM_MAX;
+    num = Math.round(num);
 
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
@@ -1281,7 +1328,7 @@ function updateInspectorChannelVolume(si, val) {
 
     const labelNode = document.getElementById("inspector-dimmer-label");
     if (labelNode) {
-        labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${Math.round(num * 100)}%)</span>`;
+        labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${num})</span>`;
     }
 
     const rangeInput = document.getElementById("inspector-dimmer-range");
@@ -1296,12 +1343,12 @@ function updateInspectorChannelVolume(si, val) {
 
     const blockNode = document.getElementById(`inspector-ch-block-${si}`);
     if (blockNode) {
-        blockNode.title = `${Math.round(num * 100)}%`;
+        blockNode.title = `${num}`;
         const chanColor = config.colors[si] || default_color;
         if (num > 0) {
             blockNode.classList.add("on");
             blockNode.style.background = chanColor;
-            blockNode.style.opacity = 0.2 + num * 0.8;
+            blockNode.style.opacity = 0.2 + (num / PWM_MAX) * 0.8;
         } else {
             blockNode.classList.remove("on");
             blockNode.style.background = "#222";
@@ -1398,7 +1445,7 @@ function renderInspector() {
                     return `<div class="block" id="inspector-ch-block-${si}" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:10px; font-weight:bold; background:#222; ${isActive}" onclick="selectInspectorChannel(${si})">-</div>`;
                 } else {
                     const val = parseFloat(s) || 0;
-                    return `<div class="block ${val > 0 ? "on" : ""}" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + val * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${Math.round(val * 100)}%"></div>`;
+                    return `<div class="block ${val > 0 ? "on" : ""}" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + (val / PWM_MAX) * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${val}"></div>`;
                 }
             })
             .join("");
@@ -1417,9 +1464,9 @@ function renderInspector() {
                         : "";
                 const chanColor = config.colors[si] || default_color;
                 if (val > 0) {
-                    return `<div class="block on" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + val * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${Math.round(val * 100)}%"></div>`;
+                    return `<div class="block on" id="inspector-ch-block-${si}" style="background: ${chanColor}; opacity: ${0.2 + (val / PWM_MAX) * 0.8}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${val}"></div>`;
                 } else {
-                    return `<div class="block" id="inspector-ch-block-${si}" style="background: #222; ${isActive}" onclick="selectInspectorChannel(${si})" title="0%"></div>`;
+                    return `<div class="block" id="inspector-ch-block-${si}" style="background: #222; ${isActive}" onclick="selectInspectorChannel(${si})" title="0"></div>`;
                 }
             })
             .join("");
@@ -1431,7 +1478,7 @@ function renderInspector() {
             ? ' <span style="color:#777; font-style:italic;">(None Selected)</span>'
             : currentChVal === -1
               ? ' <span style="color:#777; font-style:italic;">(Unchanged)</span>'
-              : ` <span>(${Math.round(displayVal * 100)}%)</span>`;
+              : ` <span>(${displayVal})</span>`;
 
     let resetBtnHtml = "";
     if (
@@ -1449,8 +1496,8 @@ function renderInspector() {
                         ${resetBtnHtml}
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="range" id="inspector-dimmer-range" min="0" max="1" step="0.05" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="flex:1; accent-color:var(--accent); cursor:pointer;">
-                        <input type="number" id="inspector-dimmer-number" min="0" max="1" step="0.01" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="width:55px; text-align:center;">
+                        <input type="range" id="inspector-dimmer-range" min="${PWM_MIN}" max="${PWM_MAX}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="flex:1; accent-color:var(--accent); cursor:pointer;">
+                        <input type="number" id="inspector-dimmer-number" min="${PWM_MIN}" max="${PWM_MAX}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="width:65px; text-align:center;">
                     </div>
                 </div>
             `;
@@ -1747,7 +1794,9 @@ async function playSinglePattern(p, path) {
         for (let f = 0; f < p.phases.anim.amount * 2; f++) {
             if (!isPlaying) break;
             renderLights(
-                f % 2 === 0 ? p.state : new Array(config.channels).fill(0),
+                f % 2 === 0
+                    ? p.state
+                    : new Array(config.channels).fill(PWM_MIN),
                 0,
             );
             await sleep(step, abortController.signal);
@@ -1756,7 +1805,10 @@ async function playSinglePattern(p, path) {
     }
 
     if (p.phases.out.type === "fade" && p.phases.out.duration > 0) {
-        renderLights(new Array(config.channels).fill(0), p.phases.out.duration);
+        renderLights(
+            new Array(config.channels).fill(PWM_MIN),
+            p.phases.out.duration,
+        );
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
     } else if (p.phases.out.type === "steady" && p.phases.out.duration > 0) {
@@ -1775,7 +1827,7 @@ function stopStrobe() {
     btn.className = "play-btn";
     document.getElementById("playback-text").innerText = "PLAY";
     document.getElementById("playback-icon").src = "/assets/play.svg";
-    renderLights(new Array(config.channels).fill(0), 0);
+    renderLights(new Array(config.channels).fill(PWM_MIN), 0);
 }
 
 // ==========================================================================
@@ -1914,8 +1966,8 @@ UX: function duplicateGroup(gIdx) {
 function invertGroup(gIdx) {
     config.patterns[gIdx].patterns.forEach((p) => {
         p.state = p.state.map((s) => {
-            let val = parseFloat(s) || 0;
-            return Math.round((1.0 - val) * 100) / 100;
+            let val = Math.round(parseFloat(s) || 0);
+            return PWM_MAX - val;
         });
     });
     renderTable();
@@ -1928,7 +1980,7 @@ function toggleSolo(gIdx) {
 
 function addPattern() {
     config.patterns.push({
-        state: new Array(config.channels).fill(0),
+        state: new Array(config.channels).fill(PWM_MIN),
         phases: {
             in: { type: "none", duration: 0 },
             anim: { type: "none", amount: 0, duration: 0 },
@@ -1948,8 +2000,8 @@ function duplicateRow(path) {
 function invertRow(path, render = true) {
     let p = getObjByPath(path);
     p.state = p.state.map((s) => {
-        let val = parseFloat(s) || 0;
-        return Math.round((1.0 - val) * 100) / 100;
+        let val = Math.round(parseFloat(s) || 0);
+        return PWM_MAX - val;
     });
     if (render) renderTable();
 }
@@ -2111,7 +2163,7 @@ function handleManualJsonEdit(val) {
     try {
         const p = JSON.parse(val);
         if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
-            config = p;
+            config = migrateConfigToPWM(p);
             if (!config._strobe_editor_version)
                 config._strobe_editor_version = "1";
             if (!config.colors) config.colors = [];
@@ -2120,7 +2172,7 @@ function handleManualJsonEdit(val) {
             syncCanvasLayoutLength();
             document.getElementById("light-bar").innerHTML = "";
             document.getElementById("custom-layout-view").innerHTML = "";
-            renderLights(new Array(config.channels).fill(0), 0);
+            renderLights(new Array(config.channels).fill(PWM_MIN), 0);
             document.getElementById("global-channels").value = config.channels;
             activePath = null;
             inspectorBuffer = null;
@@ -2216,7 +2268,7 @@ function setPreviewMode(mode) {
         let currP = getObjByPath(activePath);
         if (currP && currP.state) renderLights(currP.state, 0);
     } else {
-        renderLights(new Array(config.channels).fill(0), 0);
+        renderLights(new Array(config.channels).fill(PWM_MIN), 0);
     }
 }
 
@@ -2249,7 +2301,9 @@ function setCanvasItemShape(shape) {
     }
 
     renderLights(
-        isPlaying ? currentLightState : new Array(config.channels).fill(0),
+        isPlaying
+            ? currentLightState
+            : new Array(config.channels).fill(PWM_MIN),
     );
 }
 
@@ -2319,7 +2373,9 @@ function resetIndicatorPositions() {
     }
 
     renderLights(
-        isPlaying ? currentLightState : new Array(config.channels).fill(0),
+        isPlaying
+            ? currentLightState
+            : new Array(config.channels).fill(PWM_MIN),
     );
     showToast("Indicator positions reset", "success");
 }
@@ -2422,13 +2478,14 @@ function renderLights(state, transitionMs = 0) {
             l.style.transition = `all ${transitionMs}ms ease-in-out`;
         else l.style.transition = `all 0.05s`;
         const val = parseFloat(state[i]) || 0;
+        const normalized = val / PWM_MAX;
         const chanColor = config.colors[i] || default_color;
         if (val > 0) {
             l.classList.add("on");
             l.style.background = chanColor;
             l.style.borderColor = chanColor;
-            l.style.opacity = val;
-            l.style.boxShadow = `0 0 ${15 * val}px ${chanColor}`;
+            l.style.opacity = normalized;
+            l.style.boxShadow = `0 0 ${15 * normalized}px ${chanColor}`;
         } else {
             l.classList.remove("on");
             l.style.background = "#222";
@@ -2455,12 +2512,13 @@ function renderLights(state, transitionMs = 0) {
         else el.style.transition = `all 0.05s, left 0s, top 0s`;
 
         const val = parseFloat(state[i]) || 0;
+        const normalized = val / PWM_MAX;
         const chanColor = config.colors[i] || default_color;
         if (val > 0) {
             el.style.background = chanColor;
             el.style.borderColor = chanColor;
-            el.style.opacity = val;
-            el.style.boxShadow = `0 0 ${15 * val}px ${chanColor}`;
+            el.style.opacity = normalized;
+            el.style.boxShadow = `0 0 ${15 * normalized}px ${chanColor}`;
             el.style.color = "#000";
         } else {
             el.style.background = "#222";
@@ -2493,6 +2551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             } catch (err) {}
         }
     }
+    config = migrateConfigToPWM(config);
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
     if (!config.colors) config.colors = [];
     while (config.colors.length < config.channels)
@@ -2504,7 +2563,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         saveState(JSON.stringify(config));
     }
     document.getElementById("global-channels").value = config.channels;
-    renderLights(new Array(config.channels).fill(0), 0);
+    renderLights(new Array(config.channels).fill(PWM_MIN), 0);
     renderTable();
     renderInspector();
     updateUndoRedoButtons();
