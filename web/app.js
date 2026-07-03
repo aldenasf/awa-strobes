@@ -304,6 +304,11 @@ function ensureConfigDefaults() {
     }
     if (config.defaultPattern.backgroundDim === undefined)
         config.defaultPattern.backgroundDim = false;
+
+    if (props.ipAddress === undefined) props.ipAddress = "192.168.4.1";
+    if (!Array.isArray(props.pinsMapping)) props.pinsMapping = [];
+    // Ensure length matches channels
+    syncPinsMappingLength();
 }
 
 // ==========================================================================
@@ -409,6 +414,7 @@ function applyHistoryState() {
     config = JSON.parse(historyStack[historyIndex]);
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
     ensureConfigDefaults(); // also migrates colors
+    syncPinsMappingLength();
     syncCanvasLayoutLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
@@ -831,6 +837,7 @@ function loadJsonFile(file) {
             ) {
                 config = p;
                 ensureConfigDefaults(); // migrates colors
+                syncPinsMappingLength();
                 config = migrateConfigToPWM(config);
                 if (!config._strobe_editor_version)
                     config._strobe_editor_version = "1";
@@ -906,6 +913,7 @@ function newProject() {
     };
     ensureConfigDefaults();
     syncCanvasLayoutLength();
+    syncPinsMappingLength();
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
     const bgDim = getBackgroundDimForPath(null);
@@ -988,7 +996,7 @@ function toggleProjectSettingsModal() {
     } else {
         closeAllModals();
         m.style.display = "flex";
-        // populate project settings values
+        // populate existing fields
         document.getElementById("settings-pwm-min").value =
             config.properties.pwm.min || DEFAULT_PWM_MIN;
         document.getElementById("settings-pwm-max").value =
@@ -997,8 +1005,11 @@ function toggleProjectSettingsModal() {
             !!config.properties.pwm.indicatorOffAtMin;
         document.getElementById("settings-background-dim-pwm").value =
             config.properties.backgroundDim.pwm || 0;
+        document.getElementById("settings-ip-address").value =
+            config.properties.ipAddress || "192.168.4.1";
         updateBackgroundDimPreview();
         updateColorModeControls();
+        renderPinsMappingUI(); // new
     }
 }
 function updateBrushIncrementSetting(val) {
@@ -1547,6 +1558,8 @@ function ungroup(gIdx) {
 function updateGlobalChannels(val) {
     let n = parseInt(val) || 1;
     config.channels = n;
+    syncPinsMappingLength();
+
     // adjust indicatorColors
     if (!config.properties.indicator.channelColors)
         config.properties.indicator.channelColors = [];
@@ -3169,6 +3182,7 @@ function handleManualJsonEdit(val) {
     if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
         config = p;
         ensureConfigDefaults(); // migrates colors & properties
+        syncPinsMappingLength();
         config = migrateConfigToPWM(config);
         if (!config._strobe_editor_version) config._strobe_editor_version = "1";
         syncCanvasLayoutLength();
@@ -3724,12 +3738,12 @@ function setupLayoutPanelsResizers() {
     }
 }
 
-const ESP_IP = "192.168.4.1";
 let socket;
 
 function initWebSocket() {
-    console.log("[WS] Attempting connection to ws://" + ESP_IP + ":81 ...");
-    socket = new WebSocket(`ws://${ESP_IP}:81`);
+    const ip = config.properties.ipAddress || "192.168.4.1";
+    console.log("[WS] Attempting connection to ws://" + ip + ":81 ...");
+    socket = new WebSocket(`ws://${ip}:81`);
 
     socket.onopen = () => {
         console.log(
@@ -3742,7 +3756,6 @@ function initWebSocket() {
         console.warn(
             `[WS] DISCONNECTED: Code ${event.code}, Reason: ${event.reason || "None"}`,
         );
-        // Auto-retry connection every 3 seconds
         setTimeout(initWebSocket, 3000);
     };
 
@@ -3751,7 +3764,6 @@ function initWebSocket() {
     };
 
     socket.onmessage = (e) => {
-        // Logs anything the ESP32 sends BACK to your laptop
         console.log("[WS] RECEIVED FROM ESP32 ->", e.data);
     };
 }
@@ -3782,21 +3794,17 @@ window.addEventListener("load", () => {
 
 // WIRELESS OVER-THE-AIR CONFIGURATION UPLOAD
 function uploadConfigToESP32() {
-    // 1. Safety Check: Verify that we actually have a working WebSocket connection first
+    const ip = config.properties.ipAddress || "192.168.4.1";
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         showToast("Upload Failed: Connect to 'Strobe-Editor' hotspot first!");
         return;
     }
-
     showToast("Transmitting configuration to MicroSD card...");
 
-    // 2. Perform an HTTP POST request sending the raw editor 'config' object
-    fetch(`http://${ESP_IP}/upload`, {
+    fetch(`http://${ip}/upload`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(config), // Grab the active workspace layout state
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
     })
         .then(async (response) => {
             if (response.ok) {
@@ -3811,7 +3819,6 @@ function uploadConfigToESP32() {
             showToast("Network Error: Connection timed out or dropped.");
         });
 }
-
 function closeAllModals() {
     const modalIds = [
         "help-modal",
@@ -3823,4 +3830,53 @@ function closeAllModals() {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
     });
+}
+
+function syncPinsMappingLength() {
+    if (!config.properties) config.properties = {};
+    if (!Array.isArray(config.properties.pinsMapping)) {
+        config.properties.pinsMapping = [];
+    }
+    while (config.properties.pinsMapping.length < config.channels) {
+        config.properties.pinsMapping.push(null);
+    }
+    if (config.properties.pinsMapping.length > config.channels) {
+        config.properties.pinsMapping = config.properties.pinsMapping.slice(
+            0,
+            config.channels,
+        );
+    }
+}
+function updatePinMapping(channelIndex, value) {
+    if (value === "") {
+        config.properties.pinsMapping[channelIndex] = null;
+    } else {
+        const pin = parseInt(value);
+        config.properties.pinsMapping[channelIndex] = Number.isNaN(pin)
+            ? null
+            : pin;
+    }
+    updateJsonPanel();
+}
+function updateIpAddress(value) {
+    config.properties.ipAddress = value;
+    updateJsonPanel();
+}
+function renderPinsMappingUI() {
+    const container = document.getElementById("pins-mapping-container");
+    if (!container) return;
+    const pins = config.properties.pinsMapping || [];
+    let html = "";
+    for (let i = 0; i < config.channels; i++) {
+        const val = pins[i] !== undefined && pins[i] !== null ? pins[i] : "";
+        html += `
+            <div style="display: flex; align-items: center; gap: 6px; background: #1a1a1a; padding: 4px 8px; border-radius: 4px; border: 1px solid #333;">
+                <span style="font-size: 11px; font-weight: bold; color: #aaa; min-width: 32px;">CH${i + 1}</span>
+                <input type="number" value="${val}" placeholder="Unmapped"
+                       oninput="updatePinMapping(${i}, this.value)"
+                       style="width: 100%; background: #252525; border: 1px solid #444; color: white; padding: 4px 6px; border-radius: 3px; font-size: 11px; outline: none; box-sizing: border-box;">
+            </div>
+        `;
+    }
+    container.innerHTML = html;
 }

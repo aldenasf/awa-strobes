@@ -170,6 +170,7 @@
                     <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
                 </button>
             </div>
+
             <!-- Configuration -->
             <div style="margin-bottom: 20px;">
                 <div class="settings-section-header">Configuration</div>
@@ -188,9 +189,33 @@
                 </div>
             </div>
 
+            <!-- Microcontroller -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Microcontroller</div>
+
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <div class="inspector-label" style="color: var(--text);">WebSocket IP Address</div>
+                    <input type="text" id="settings-ip-address" value="192.168.4.1"
+                        oninput="updateIpAddress(this.value)"
+                        style="width: 100%; background: #1e1e1e; border: 1px solid #444; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box;">
+                    <div style="font-size: 10px; color: #666; margin-top: 4px;">Used for WebSocket connection to the
+                        ESP32.</div>
+                </div>
+
+                <div class="inspector-section" style="background: #222;">
+                    <div class="inspector-label" style="color: var(--text);">Channels to GPIO Pin Mapping</div>
+                    <div id="pins-mapping-container"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                        <!-- populated by JavaScript -->
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-top: 6px;">Leave empty to mark a channel as
+                        unmapped.</div>
+                </div>
+            </div>
+
             <!-- PWM -->
             <div style="margin-bottom: 20px;">
-                <div class="settings-section-header">PWM</div>
+                <div class="settings-section-header">LIGHTS</div>
 
                 <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
                     <div class="inspector-label" style="color: var(--text);">PWM Range</div>
@@ -216,11 +241,6 @@
                         </label>
                     </div>
                 </div>
-            </div>
-
-            <!-- Background Dim -->
-            <div style="margin-bottom: 20px;">
-                <div class="settings-section-header">Background Dim</div>
 
                 <div class="inspector-section"
                     style="background: #222; margin-bottom: 15px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
@@ -266,6 +286,7 @@
                     </div>
                 </div>
             </div>
+
         </div>
     </div>
 
