@@ -39,7 +39,7 @@ let config = {
     },
 };
 let appMode = "edit";
-let showSteps = true;
+let showSteps = localStorage.getItem("strobe_show_steps") !== "false";
 let selectedPaths = new Set();
 let isDraggingSelection = false;
 let dragTargetState = null;
@@ -1268,17 +1268,21 @@ function setAppMode(mode) {
 }
 
 function toggleStepIndicator() {
+    console.log(showSteps);
     showSteps = !showSteps;
-    document.getElementById("btn-toggle-steps").innerText = showSteps
-        ? "STEPS: ON"
-        : "STEPS: OFF";
-    if (showSteps)
-        document.getElementById("editor-container").classList.add("show-steps");
-    else
-        document
-            .getElementById("editor-container")
-            .classList.remove("show-steps");
+    localStorage.setItem("strobe_show_steps", showSteps);
+    syncStepUI();
 }
+
+function syncStepUI() {
+    const container = document.getElementById("editor-container");
+    if (showSteps) container.classList.add("show-steps");
+    else container.classList.remove("show-steps");
+
+    const checkbox = document.getElementById("settings-show-steps");
+    if (checkbox) checkbox.checked = showSteps;
+}
+
 window.onmouseup = () => {
     isDraggingSelection = false;
     dragTargetState = null;
@@ -3326,6 +3330,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         brushIncrement = 100;
         localStorage.setItem("strobe_brush_increment", brushIncrement);
     }
+    syncStepUI();
 
     try {
         const response = await fetch("/config.json");
