@@ -572,7 +572,12 @@ function selectCustomPopupColor(val) {
 // ==========================================================================
 function toggleHelp() {
     const m = document.getElementById("help-modal");
-    m.style.display = m.style.display === "flex" ? "none" : "flex";
+    if (m.style.display === "flex") {
+        m.style.display = "none";
+    } else {
+        closeAllModals();
+        m.style.display = "flex";
+    }
 }
 
 document.addEventListener("click", () => {
@@ -944,8 +949,11 @@ document.addEventListener("drop", (e) => {
 
 function toggleJsonModal() {
     const m = document.getElementById("json-modal");
-    m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
+        m.style.display = "none";
+    } else {
+        closeAllModals();
+        m.style.display = "flex";
         updateJsonPanel();
         showJsonValid();
     }
@@ -957,8 +965,12 @@ function toggleJsonModal() {
 // ==========================================================================
 function togglePreferencesModal() {
     const m = document.getElementById("preferences-modal");
-    m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
+        m.style.display = "none";
+    } else {
+        closeAllModals();
+        m.style.display = "flex";
+        // populate preferences values if needed
         document.getElementById("settings-brush-increment").value =
             brushIncrement;
         document.getElementById("settings-show-steps").checked = showSteps;
@@ -971,8 +983,12 @@ function togglePreferencesModal() {
 // ==========================================================================
 function toggleProjectSettingsModal() {
     const m = document.getElementById("project-settings-modal");
-    m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
+        m.style.display = "none";
+    } else {
+        closeAllModals();
+        m.style.display = "flex";
+        // populate project settings values
         document.getElementById("settings-pwm-min").value =
             config.properties.pwm.min || DEFAULT_PWM_MIN;
         document.getElementById("settings-pwm-max").value =
@@ -982,12 +998,9 @@ function toggleProjectSettingsModal() {
         document.getElementById("settings-background-dim-pwm").value =
             config.properties.backgroundDim.pwm || 0;
         updateBackgroundDimPreview();
-
-        // Populate indicator color mode controls
         updateColorModeControls();
     }
 }
-
 function updateBrushIncrementSetting(val) {
     let parsed = parseFloat(val);
     if (isNaN(parsed) || parsed <= 0) return;
@@ -3797,4 +3810,17 @@ function uploadConfigToESP32() {
             console.error("Upload network exception:", err);
             showToast("Network Error: Connection timed out or dropped.");
         });
+}
+
+function closeAllModals() {
+    const modalIds = [
+        "help-modal",
+        "json-modal",
+        "preferences-modal",
+        "project-settings-modal",
+    ];
+    modalIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+    });
 }
