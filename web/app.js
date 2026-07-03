@@ -3113,7 +3113,7 @@ function showJsonValid() {
     if (!bar) return;
     bar.classList.remove("status-error");
     bar.classList.add("status-valid");
-    bar.textContent = "✓ Valid JSON";
+    bar.innerHTML = `<img src="/assets/valid.svg" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"> Valid JSON`;
 }
 
 function showJsonError(err) {
@@ -3130,7 +3130,7 @@ function showJsonError(err) {
         );
         message += ` (line ${line})`;
     }
-    bar.textContent = `❌ ${message}`;
+    bar.innerHTML = `<img src="/assets/invalid.svg" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"> ${message}`;
 }
 
 function formatJson() {

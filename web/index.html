@@ -36,8 +36,12 @@
 
     <div id="help-modal" onclick="toggleHelp()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="margin:0 0 10px 0; color:var(--accent); font-size: 18px;">Keyboard Shortcuts Guide</h3>
-
+            <div class="modal-header">
+                <h3 style="margin:0; color:var(--accent); font-size:18px;">Keyboard Shortcuts Guide</h3>
+                <button class="modal-close-btn" onclick="toggleHelp()">
+                    <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
+                </button>
+            </div>
             <div class="shortcut-category">User Experience</div>
             <div
                 style="font-size: 11px; margin-bottom: 12px; line-height: 1.4; color: #ccc; background: #222; padding: 10px; border-radius: 4px; border: 1px solid var(--border);">
@@ -78,33 +82,42 @@
             <div class="shortcut-item"><span>Reverse Selection Order</span> <span class="key-bind">Ctrl + R</span></div>
             <div class="shortcut-item"><span>Select All Patterns</span> <span class="key-bind">Ctrl + A</span></div>
             <div class="shortcut-item"><span>Clear Selection</span> <span class="key-bind">Esc</span></div>
-            <div style="text-align:right; margin-top:20px"><button onclick="toggleHelp()">CLOSE</button></div>
         </div>
     </div>
 
     <div id="json-modal" onclick="toggleJsonModal()">
-        <div class="modal-content" style="max-width: 800px; display:flex; flex-direction:column; height: 80vh;"
+        <div class="modal-content" style="max-width:800px; display:flex; flex-direction:column; height:80vh;"
             onclick="event.stopPropagation()">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
-                <h3 style="margin:0; color:var(--accent); font-size: 18px; text-transform: uppercase;">JSON Editor
-                </h3>
-                <div style="display:flex; gap:10px;">
-                    <button class="format-json-btn" onclick="formatJson()" title="Format JSON">FORMAT</button>
-                    <button onclick="toggleJsonModal()">CLOSE</button>
-                </div>
+            <div class="modal-header" style="flex-shrink:0;">
+                <h3 style="margin:0; color:var(--accent); font-size:18px; text-transform:uppercase;">JSON Editor</h3>
+                <button class="modal-close-btn" onclick="toggleJsonModal()">
+                    <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
+                </button>
+            </div>
+            <!-- Toolbar with Open / Save / Copy / Format -->
+            <div class="modal-actions" style="display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; flex-shrink:0;">
+                <button class="btn-compact" onclick="document.getElementById('file-input').click()"
+                    title="Open JSON (Ctrl+O)">Open</button>
+                <button class="btn-compact" onclick="downloadConfig()" title="Save JSON (Ctrl+S)">Save</button>
+                <button class="btn-compact" onclick="copyToClipboard()" title="Copy JSON">Copy</button>
+                <button class="btn-compact format-json-btn" onclick="formatJson()" title="Format JSON">Format</button>
             </div>
             <textarea id="json-input" spellcheck="false" oninput="handleManualJsonEdit(this.value)"
-                style="flex:1; width:100%; background: #111; color: #a5d6ff; font-family: 'Consolas', monospace; font-size: 11px; padding: 15px; border: 1px solid var(--border); border-radius: 6px; resize: none; outline: none; line-height: 1.4; box-sizing:border-box;"></textarea>
+                style="flex:1; width:100%; background:#111; color:#a5d6ff; font-family:'Consolas',monospace; font-size:11px; padding:15px; border:1px solid var(--border); border-radius:6px; resize:none; outline:none; line-height:1.4; box-sizing:border-box;"></textarea>
             <div id="json-status-bar"></div>
         </div>
     </div>
 
     <div id="preferences-modal" onclick="togglePreferencesModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3
-                style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
-                Preferences
-            </h3>
+            <div class="modal-header">
+                <h3
+                    style="margin:0; color:var(--accent); font-size:18px; text-transform:uppercase; letter-spacing:0.5px;">
+                    Preferences</h3>
+                <button class="modal-close-btn" onclick="togglePreferencesModal()">
+                    <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
+                </button>
+            </div>
 
             <!-- Paint Tool -->
             <div style="margin-bottom: 20px;">
@@ -144,20 +157,19 @@
                         Keyboard Shortcuts</button>
                 </div>
             </div>
-
-            <div style="text-align: right; margin-top: 25px;">
-                <button onclick="togglePreferencesModal()">CLOSE</button>
-            </div>
         </div>
     </div>
 
     <div id="project-settings-modal" onclick="toggleProjectSettingsModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3
-                style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
-                Project Settings
-            </h3>
-
+            <div class="modal-header">
+                <h3
+                    style="margin:0; color:var(--accent); font-size:18px; text-transform:uppercase; letter-spacing:0.5px;">
+                    Project Settings</h3>
+                <button class="modal-close-btn" onclick="toggleProjectSettingsModal()">
+                    <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
+                </button>
+            </div>
             <!-- Configuration -->
             <div style="margin-bottom: 20px;">
                 <div class="settings-section-header">Configuration</div>
@@ -253,10 +265,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div style="text-align: right; margin-top: 25px;">
-                <button onclick="toggleProjectSettingsModal()">CLOSE</button>
             </div>
         </div>
     </div>

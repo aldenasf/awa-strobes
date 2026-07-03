@@ -648,6 +648,52 @@ tr.group-header {
     align-items: center;
 }
 
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+/* Modal header with title and close button */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    line-height: 1;
+}
+
+.modal-close-btn:hover {
+    opacity: 1;
+}
+
+/* Toolbar for JSON editor actions */
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.modal-actions button {
+    background: #2a2a2a;
+    padding: 4px 12px;
+    font-size: 11px;
+}
+
+.modal-actions button:hover {
+    background: #444;
+}
+
 .modal-content {
     background: #1a1a1a;
     padding: 30px;
