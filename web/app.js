@@ -15,36 +15,41 @@
 const version = "1";
 const default_color = "#ff2a2a";
 const DEFAULT_PWM_MIN = 0;
-const DEFAULT_PWM_MAX = 1023;
+const DEFAULT_PWM_MAX = 255;
 
-let config = {
-    _strobe_editor_version: "1",
-    channels: 10,
-    properties: {
-        pwm: {
-            min: DEFAULT_PWM_MIN,
-            max: DEFAULT_PWM_MAX,
-            indicatorOffAtMin: false,
+function getDefaultConfig() {
+    return {
+        _strobe_editor_version: "1",
+        channels: 10,
+        properties: {
+            pwm: {
+                min: DEFAULT_PWM_MIN,
+                max: DEFAULT_PWM_MAX,
+                indicatorOffAtMin: false,
+            },
+            backgroundDim: {
+                pwm: 50,
+            },
+            indicator: {
+                mode: "global", // "global" or "per-channel"
+                globalColor: default_color, // used when mode is "global"
+                channelColors: [], // used when mode is "per-channel"
+            },
         },
-        backgroundDim: {
-            pwm: 0,
+        defaultPattern: {
+            backgroundDim: false,
+            phases: {
+                in: { type: "none", duration: 0 },
+                anim: { type: "flicker", amount: 5, duration: 500 },
+                out: { type: "none", duration: 0 },
+            },
         },
-        indicator: {
-            mode: "per-channel", // "global" or "per-channel"
-            globalColor: default_color, // used when mode is "global"
-            channelColors: [], // used when mode is "per-channel"
-        },
-    },
-    patterns: [],
-    defaultPattern: {
-        backgroundDim: false,
-        phases: {
-            in: { type: "none", duration: 0 },
-            anim: { type: "none", amount: 0, duration: 0 },
-            out: { type: "steady", duration: 500 },
-        },
-    },
-};
+        patterns: [],
+    };
+}
+
+let config = getDefaultConfig();
+
 let appMode = "edit";
 let showSteps = localStorage.getItem("strobe_show_steps") !== "false";
 let selectedPaths = new Set();
@@ -885,32 +890,8 @@ function newProject() {
         if (!confirmed) return;
     }
 
-    config = {
-        _strobe_editor_version: version,
-        channels: 10,
-        properties: {
-            pwm: {
-                min: DEFAULT_PWM_MIN,
-                max: DEFAULT_PWM_MAX,
-                indicatorOffAtMin: false,
-            },
-            backgroundDim: { pwm: 0 },
-            indicator: {
-                mode: "per-channel",
-                globalColor: default_color,
-                channelColors: [],
-            },
-        },
-        patterns: [],
-        defaultPattern: {
-            backgroundDim: false,
-            phases: {
-                in: { type: "none", duration: 0 },
-                anim: { type: "none", amount: 0, duration: 0 },
-                out: { type: "steady", duration: 500 },
-            },
-        },
-    };
+    config = getDefaultConfig();
+
     ensureConfigDefaults();
     syncCanvasLayoutLength();
     syncPinsMappingLength();
@@ -1390,7 +1371,8 @@ document.addEventListener("click", () => {
 // Downloading / copying the current config as JSON.
 // ==========================================================================
 function downloadConfig() {
-    const blob = new Blob([JSON.stringify(config, null, 2)], {
+    const blob = new Blob([JSON.stringify(getOrderedConfig(), null, 2)], {
+        // <-- changed
         type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -3101,9 +3083,10 @@ function handleDrop(target, dragged) {
 // ==========================================================================
 function updateJsonPanel() {
     const el = document.getElementById("json-input"),
-        currentJson = JSON.stringify(config);
+        currentJson = JSON.stringify(getOrderedConfig()); // <-- changed
     if (document.activeElement !== el) {
-        el.value = JSON.stringify(config, null, 2).replace(
+        el.value = JSON.stringify(getOrderedConfig(), null, 2).replace(
+            // <-- changed
             /"state":\s*\[\s+([\s\S]*?)\s+\]/g,
             (m, p) =>
                 `"state": [${p
@@ -3613,7 +3596,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (historyStack.length === 0 || historyIndex === -1) {
         historyStack = [];
         historyIndex = -1;
-        saveState(JSON.stringify(config));
+        saveState(JSON.stringify(getOrderedConfig()));
     }
     document.getElementById("global-channels").value = config.channels;
     const bgDim = getBackgroundDimForPath(activePath);
@@ -3738,6 +3721,34 @@ function setupLayoutPanelsResizers() {
     }
 }
 
+// ==========================================================================
+// ORDERED CONFIG SERIALIZATION
+// Returns a shallow copy of `config` with keys ordered so that 'patterns'
+// appears last in the JSON output.
+// ==========================================================================
+function getOrderedConfig() {
+    const cfg = config;
+    const orderedKeys = [
+        "_strobe_editor_version",
+        "channels",
+        "properties",
+        "defaultPattern",
+        "patterns",
+    ];
+    const result = {};
+    // Add known keys in the desired order
+    for (const key of orderedKeys) {
+        if (key in cfg) result[key] = cfg[key];
+    }
+    // Append any remaining keys that were not explicitly ordered
+    for (const key of Object.keys(cfg)) {
+        if (!orderedKeys.includes(key)) {
+            result[key] = cfg[key];
+        }
+    }
+    return result;
+}
+
 let socket;
 
 function initWebSocket() {
@@ -3804,7 +3815,7 @@ function uploadConfigToESP32() {
     fetch(`http://${ip}/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify(getOrderedConfig()), // <-- changed
     })
         .then(async (response) => {
             if (response.ok) {
@@ -3819,6 +3830,7 @@ function uploadConfigToESP32() {
             showToast("Network Error: Connection timed out or dropped.");
         });
 }
+
 function closeAllModals() {
     const modalIds = [
         "help-modal",
