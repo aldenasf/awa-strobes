@@ -86,34 +86,99 @@
         <div class="modal-content" style="max-width: 800px; display:flex; flex-direction:column; height: 80vh;"
             onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
-                <h3 style="margin:0; color:var(--accent); font-size: 18px; text-transform: uppercase;">Live Config Data
+                <h3 style="margin:0; color:var(--accent); font-size: 18px; text-transform: uppercase;">JSON Editor
                 </h3>
                 <div style="display:flex; gap:10px;">
-                    <button class="open-json-btn" onclick="document.getElementById('file-input').click()"
-                        title="Open JSON File (Ctrl+O)">OPEN</button>
-                    <button class="copy-json-btn" onclick="copyToClipboard()" title="Copy to Clipboard">COPY</button>
+                    <button class="format-json-btn" onclick="formatJson()" title="Format JSON">FORMAT</button>
                     <button onclick="toggleJsonModal()">CLOSE</button>
                 </div>
             </div>
-            <input type="file" id="file-input" accept=".json" style="display: none;" onchange="handleFileInput(event)">
             <textarea id="json-input" spellcheck="false" oninput="handleManualJsonEdit(this.value)"
                 style="flex:1; width:100%; background: #111; color: #a5d6ff; font-family: 'Consolas', monospace; font-size: 11px; padding: 15px; border: 1px solid var(--border); border-radius: 6px; resize: none; outline: none; line-height: 1.4; box-sizing:border-box;"></textarea>
+            <div id="json-status-bar"></div>
         </div>
     </div>
 
-    <div id="settings-modal" onclick="toggleSettingsModal()">
+    <div id="preferences-modal" onclick="togglePreferencesModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3
                 style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
-                Settings
+                Preferences
             </h3>
 
-            <!-- Project Settings -->
+            <!-- Paint Tool -->
             <div style="margin-bottom: 20px;">
-                <div
-                    style="font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 6px;">
-                    Project Settings
+                <div class="settings-section-header">Paint Tool</div>
+
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <div class="inspector-label" style="color: var(--text);">Scroll Wheel Step Value (PWM)</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;  margin-top: 10px;">
+                        <span style="font-size: 12px; color: #ccc;">Step Value:</span>
+                        <input type="number" id="settings-brush-increment" min="1" max="1023" step="1" value="100"
+                            oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-top: 6px;">This value is stored locally and not
+                        saved in the project.</div>
                 </div>
+            </div>
+
+            <!-- Indicator -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Indicator</div>
+
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <label
+                        style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="settings-show-steps" onchange="toggleStepIndicator()"> Show step
+                        indicator (Ctrl+T)
+                    </label>
+                </div>
+            </div>
+
+            <!-- Help & Shortcuts -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Help & Shortcuts</div>
+
+                <div class="inspector-section" style="background: #222;">
+                    <button class="btn-compact" style="background: var(--accent);" onclick="toggleHelp()">Open
+                        Keyboard Shortcuts</button>
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 25px;">
+                <button onclick="togglePreferencesModal()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="project-settings-modal" onclick="toggleProjectSettingsModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3
+                style="margin:0 0 15px 0; color:var(--accent); font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Project Settings
+            </h3>
+
+            <!-- Configuration -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Configuration</div>
+
+                <div class="inspector-section"
+                    style="background: #222; margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn-compact" onclick="newProject()" title="New Project">New Project</button>
+                    <button class="btn-compact" onclick="document.getElementById('file-input').click()"
+                        title="Open JSON File (Ctrl+O)">Open JSON</button>
+                    <button class="btn-compact" onclick="downloadConfig()" title="Save Config (Ctrl+S)">Save
+                        JSON</button>
+                    <button class="btn-compact" onclick="copyToClipboard()" title="Copy to Clipboard">Copy
+                        JSON</button>
+                    <input type="file" id="file-input" accept=".json" style="display: none;"
+                        onchange="handleFileInput(event)">
+                </div>
+            </div>
+
+            <!-- PWM -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">PWM</div>
 
                 <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
                     <div class="inspector-label" style="color: var(--text);">PWM Range</div>
@@ -139,11 +204,15 @@
                         </label>
                     </div>
                 </div>
+            </div>
+
+            <!-- Background Dim -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Background Dim</div>
 
                 <div class="inspector-section"
                     style="background: #222; margin-bottom: 15px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
                     <div>
-
                         <div class="inspector-label" style="color: var(--text);">Background Dim</div>
                         <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                             <label style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px;">
@@ -158,63 +227,36 @@
                         <div id="bg-dim-preview" style="display: flex; gap: 20px; align-items: center;"></div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Indicator Colors -->
-                <div style="margin-bottom: 20px;">
+            <!-- Indicator Colors -->
+            <div style="margin-bottom: 20px;">
+                <div class="settings-section-header">Indicator Colors</div>
 
-                    <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
-                        <div class="inspector-label" style="color: var(--text);">Indicator Colors</div>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div>
-                                <label
-                                    style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                    <input type="radio" name="colorMode" value="global"
-                                        onchange="setColorMode('global')"> Global Color
-                                </label>
-                                <label
-                                    style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                    <input type="radio" name="colorMode" value="per-channel"
-                                        onchange="setColorMode('per-channel')"> Per-Channel Colors
-                                </label>
-                            </div>
-                            <div id="color-mode-controls">
-                                <!-- populated by updateColorModeControls() -->
-                            </div>
+                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
+                    <div class="inspector-label" style="color: var(--text);">Indicator Colors</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div>
+                            <label
+                                style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="radio" name="colorMode" value="global" onchange="setColorMode('global')">
+                                Global Color
+                            </label>
+                            <label
+                                style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="radio" name="colorMode" value="per-channel"
+                                    onchange="setColorMode('per-channel')"> Per-Channel Colors
+                            </label>
+                        </div>
+                        <div id="color-mode-controls">
+                            <!-- populated by updateColorModeControls() -->
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- User Preferences -->
-            <div style="margin-bottom: 20px;">
-                <div
-                    style="font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 6px;">
-                    Preferences
-                </div>
-
-                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
-                    <div class="inspector-label" style="color: var(--text);">Paint Tool</div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;  margin-top: 10px;">
-                        <span style="font-size: 12px; color: #ccc;">Scroll Wheel Step Value (PWM):</span>
-                        <input type="number" id="settings-brush-increment" min="1" max="1023" step="1" value="100"
-                            oninput="updateBrushIncrementSetting(this.value)" style="width: 70px; text-align: center;">
-                    </div>
-                    <div style="font-size: 10px; color: #666; margin-top: 6px;">This value is stored locally and not
-                        saved in the project.</div>
-                </div>
-                <div class="inspector-section" style="background: #222; margin-bottom: 15px;">
-                    <div class="inspector-label" style="color: var(--text);">INDICATOR</div>
-                    <label
-                        style="font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" id="settings-show-steps" onchange="toggleStepIndicator()"> Show step
-                        indicator (Ctrl+T)
-                    </label>
-                </div>
-
-            </div>
-
             <div style="text-align: right; margin-top: 25px;">
-                <button onclick="toggleSettingsModal()">CLOSE</button>
+                <button onclick="toggleProjectSettingsModal()">CLOSE</button>
             </div>
         </div>
     </div>
@@ -314,8 +356,11 @@
                         <span id="ws-status" style="color:red; font-size:16px; line-height: 1;">⬤</span> SYNC
                     </div>
 
-                    <button title="Raw Config" onclick="toggleJsonModal()">JSON</button>
-                    <button title="Preferences" onclick="toggleSettingsModal()"><img src="/assets/settings.svg"
+                    <button title="Raw Config" onclick="toggleJsonModal()"><img src="/assets/code.svg"
+                            class="icon"></button>
+                    <button title="Project Settings" onclick="toggleProjectSettingsModal()"><img
+                            src="/assets/settings.svg" class="icon"></button>
+                    <button title="Preferences" onclick="togglePreferencesModal()"><img src="/assets/preferences.svg"
                             class="icon"></button>
                     <button onclick="addPattern()" title="Add Row (A)"><img src="/assets/plus.svg" class="icon">
                     </button>

@@ -634,7 +634,8 @@ tr.group-header {
 /* ========================================================================== */
 #help-modal,
 #json-modal,
-#settings-modal {
+#preferences-modal,
+#project-settings-modal {
     display: none;
     position: fixed;
     top: 0;
@@ -762,4 +763,43 @@ tr.group-header {
 }
 .custom-color-btn:hover {
     background: #666 !important;
+}
+
+/* ========================================================================== */
+/* SETTINGS SECTION HEADERS (Preferences / Project Settings modals) */
+/* ========================================================================== */
+.settings-section-header {
+    font-size: 11px;
+    font-weight: bold;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 6px;
+}
+
+/* ========================================================================== */
+/* JSON EDITOR - VALIDATION STATUS BAR */
+/* ========================================================================== */
+#json-status-bar {
+    margin-top: 10px;
+    font-size: 11px;
+    font-family: "Consolas", monospace;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #111;
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+#json-status-bar.status-valid {
+    color: #28a745;
+    border-color: #28a745;
+}
+
+#json-status-bar.status-error {
+    color: #dc3545;
+    border-color: #dc3545;
 }

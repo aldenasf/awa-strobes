@@ -20,15 +20,22 @@ const DEFAULT_PWM_MAX = 1023;
 let config = {
     _strobe_editor_version: "1",
     channels: 10,
+    properties: {
+        pwm: {
+            min: DEFAULT_PWM_MIN,
+            max: DEFAULT_PWM_MAX,
+            indicatorOffAtMin: false,
+        },
+        backgroundDim: {
+            pwm: 0,
+        },
+        indicator: {
+            mode: "per-channel", // "global" or "per-channel"
+            globalColor: default_color, // used when mode is "global"
+            channelColors: [], // used when mode is "per-channel"
+        },
+    },
     patterns: [],
-    // indicator colors – migrated from 'colors'
-    indicatorColorMode: "per-channel", // "global" or "per-channel"
-    indicatorColor: default_color, // used when mode is "global"
-    indicatorColors: [], // used when mode is "per-channel"
-    pwmMin: DEFAULT_PWM_MIN,
-    pwmMax: DEFAULT_PWM_MAX,
-    indicatorOffAtMin: false,
-    backgroundDimPWM: 0,
     defaultPattern: {
         backgroundDim: false,
         phases: {
@@ -161,7 +168,7 @@ function collectStateValues(patterns, out = []) {
 }
 
 function scaleStatesToPWM(patterns) {
-    const maxVal = config.pwmMax || DEFAULT_PWM_MAX;
+    const maxVal = config.properties.pwm.max || DEFAULT_PWM_MAX;
     (patterns || []).forEach((p) => {
         if (p.type === "group") {
             scaleStatesToPWM(p.patterns);
@@ -185,40 +192,82 @@ function migrateConfigToPWM(cfg) {
 }
 
 // ==========================================================================
+// CONFIG PROPERTIES MIGRATION
+// Older configs stored project settings as flat top-level fields
+// (config.properties.pwm.min, config.properties.indicator.globalColor, etc). Newer configs nest all
+// project-specific settings under config.properties. This moves any
+// legacy flat fields into the new nested shape, once.
+// ==========================================================================
+function migrateConfigProperties(cfg) {
+    if (!cfg.properties) {
+        cfg.properties = {
+            pwm: {
+                min: cfg.pwmMin ?? 0,
+                max: cfg.pwmMax ?? 1023,
+                indicatorOffAtMin: cfg.indicatorOffAtMin ?? false,
+            },
+
+            backgroundDim: {
+                pwm: cfg.backgroundDimPWM ?? 0,
+            },
+
+            indicator: {
+                mode: cfg.indicatorColorMode ?? "per-channel",
+                globalColor: cfg.indicatorColor ?? default_color,
+                channelColors: cfg.indicatorColors ?? cfg.colors ?? [],
+            },
+        };
+
+        delete cfg.pwmMin;
+        delete cfg.pwmMax;
+        delete cfg.indicatorOffAtMin;
+        delete cfg.backgroundDimPWM;
+        delete cfg.indicatorColorMode;
+        delete cfg.indicatorColor;
+        delete cfg.indicatorColors;
+        delete cfg.colors;
+    }
+
+    return cfg;
+}
+
+// ==========================================================================
 // CONFIG DEFAULTS (PWM range, indicator behaviour, background dim, default pattern)
 // ==========================================================================
 function ensureConfigDefaults() {
-    if (config.pwmMin === undefined) config.pwmMin = DEFAULT_PWM_MIN;
-    if (config.pwmMax === undefined) config.pwmMax = DEFAULT_PWM_MAX;
-    if (config.indicatorOffAtMin === undefined)
-        config.indicatorOffAtMin = false;
-    if (config.backgroundDimPWM === undefined) config.backgroundDimPWM = 0;
+    migrateConfigProperties(config);
+    const props = config.properties;
+
+    if (props.pwm.min === undefined) props.pwm.min = DEFAULT_PWM_MIN;
+    if (props.pwm.max === undefined) props.pwm.max = DEFAULT_PWM_MAX;
+    if (props.pwm.indicatorOffAtMin === undefined)
+        props.pwm.indicatorOffAtMin = false;
+    if (props.backgroundDim.pwm === undefined) props.backgroundDim.pwm = 0;
     // clamp min < max
-    if (config.pwmMin >= config.pwmMax) {
-        config.pwmMin = DEFAULT_PWM_MIN;
-        config.pwmMax = DEFAULT_PWM_MAX;
+    if (props.pwm.min >= props.pwm.max) {
+        props.pwm.min = DEFAULT_PWM_MIN;
+        props.pwm.max = DEFAULT_PWM_MAX;
     }
 
     // --- Indicator color migration & defaults ---
-    if (config.colors) {
-        config.indicatorColors = config.colors;
-        delete config.colors;
+    if (!props.indicator.channelColors) {
+        props.indicator.channelColors = new Array(config.channels).fill(
+            default_color,
+        );
     }
-    if (!config.indicatorColors) {
-        config.indicatorColors = new Array(config.channels).fill(default_color);
+    if (!props.indicator.mode) {
+        props.indicator.mode = "per-channel";
     }
-    if (!config.indicatorColorMode) {
-        config.indicatorColorMode = "per-channel";
+    if (!props.indicator.globalColor) {
+        props.indicator.globalColor =
+            props.indicator.channelColors[0] || default_color;
     }
-    if (!config.indicatorColor) {
-        config.indicatorColor = config.indicatorColors[0] || default_color;
+    // ensure channelColors length matches channels
+    while (props.indicator.channelColors.length < config.channels) {
+        props.indicator.channelColors.push(default_color);
     }
-    // ensure indicatorColors length matches channels
-    while (config.indicatorColors.length < config.channels) {
-        config.indicatorColors.push(default_color);
-    }
-    if (config.indicatorColors.length > config.channels) {
-        config.indicatorColors = config.indicatorColors.slice(
+    if (props.indicator.channelColors.length > config.channels) {
+        props.indicator.channelColors = props.indicator.channelColors.slice(
             0,
             config.channels,
         );
@@ -264,16 +313,19 @@ function ensureConfigDefaults() {
 // current indicator color mode.
 // ==========================================================================
 function getEffectiveColor(channelIdx) {
-    if (config.indicatorColorMode === "global") {
-        return config.indicatorColor || default_color;
+    if (config.properties.indicator.mode === "global") {
+        return config.properties.indicator.globalColor || default_color;
     } else {
-        return config.indicatorColors[channelIdx] || default_color;
+        return (
+            config.properties.indicator.channelColors[channelIdx] ||
+            default_color
+        );
     }
 }
 
 function isChannelOn(val) {
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    if (config.indicatorOffAtMin) {
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    if (config.properties.pwm.indicatorOffAtMin) {
         return val > min;
     } else {
         return val > 0;
@@ -281,9 +333,9 @@ function isChannelOn(val) {
 }
 
 function getChannelOpacity(val) {
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
-    if (config.indicatorOffAtMin) {
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
+    if (config.properties.pwm.indicatorOffAtMin) {
         if (val <= min) return 0;
         return Math.min(1, (val - min) / (max - min));
     } else {
@@ -292,8 +344,8 @@ function getChannelOpacity(val) {
 }
 
 function clampStateValues() {
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const clamp = (v) => Math.round(Math.min(max, Math.max(min, v)));
     (config.patterns || []).forEach((item) => {
         if (item.type === "group") {
@@ -362,7 +414,9 @@ function applyHistoryState() {
     document.getElementById("custom-layout-view").innerHTML = "";
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        new Array(config.channels).fill(
+            config.properties.pwm.min || DEFAULT_PWM_MIN,
+        ),
         0,
         bgDim,
     );
@@ -464,10 +518,11 @@ function openCustomColorPopup(e, context) {
     const hiddenPicker = document.getElementById("hidden-native-picker");
 
     let currentColor;
-    if (config.indicatorColorMode === "global") {
-        currentColor = config.indicatorColor || default_color;
+    if (config.properties.indicator.mode === "global") {
+        currentColor = config.properties.indicator.globalColor || default_color;
     } else if (typeof context === "number") {
-        currentColor = config.indicatorColors[context] || default_color;
+        currentColor =
+            config.properties.indicator.channelColors[context] || default_color;
     }
     hiddenPicker.value = currentColor;
 
@@ -497,14 +552,17 @@ function openCustomColorPopup(e, context) {
 
 function selectCustomPopupColor(val) {
     if (!val) return;
-    if (config.indicatorColorMode === "global") {
-        config.indicatorColor = val;
+    if (config.properties.indicator.mode === "global") {
+        config.properties.indicator.globalColor = val;
     } else if (typeof currentPickerContext === "number") {
-        config.indicatorColors[currentPickerContext] = val;
+        config.properties.indicator.channelColors[currentPickerContext] = val;
     }
     refreshAll();
     updateJsonPanel();
-    if (document.getElementById("settings-modal").style.display === "flex") {
+    if (
+        document.getElementById("project-settings-modal").style.display ===
+        "flex"
+    ) {
         updateColorModeControls(); // updates chip colors
     }
 }
@@ -725,9 +783,15 @@ window.addEventListener("keydown", (e) => {
         else if (document.getElementById("json-modal").style.display === "flex")
             toggleJsonModal();
         else if (
-            document.getElementById("settings-modal").style.display === "flex"
+            document.getElementById("preferences-modal").style.display ===
+            "flex"
         )
-            toggleSettingsModal();
+            togglePreferencesModal();
+        else if (
+            document.getElementById("project-settings-modal").style.display ===
+            "flex"
+        )
+            toggleProjectSettingsModal();
         else if (appMode === "select") clearSelection();
     }
 });
@@ -771,7 +835,7 @@ function loadJsonFile(file) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(
                     new Array(config.channels).fill(
-                        config.pwmMin || DEFAULT_PWM_MIN,
+                        config.properties.pwm.min || DEFAULT_PWM_MIN,
                     ),
                     0,
                     bgDim,
@@ -790,6 +854,71 @@ function loadJsonFile(file) {
         }
     };
     reader.readAsText(file);
+}
+
+// ==========================================================================
+// NEW PROJECT
+// Resets the editor to a blank project. Prompts for confirmation if the
+// current project has any patterns or non-default channel count, since
+// that state would otherwise be lost.
+// ==========================================================================
+function newProject() {
+    const hasUnsavedChanges =
+        (config.patterns && config.patterns.length > 0) ||
+        config.channels !== 10;
+    if (hasUnsavedChanges) {
+        const confirmed = confirm(
+            "Start a new project? Any unsaved changes to the current project will be lost.",
+        );
+        if (!confirmed) return;
+    }
+
+    config = {
+        _strobe_editor_version: version,
+        channels: 10,
+        properties: {
+            pwm: {
+                min: DEFAULT_PWM_MIN,
+                max: DEFAULT_PWM_MAX,
+                indicatorOffAtMin: false,
+            },
+            backgroundDim: { pwm: 0 },
+            indicator: {
+                mode: "per-channel",
+                globalColor: default_color,
+                channelColors: [],
+            },
+        },
+        patterns: [],
+        defaultPattern: {
+            backgroundDim: false,
+            phases: {
+                in: { type: "none", duration: 0 },
+                anim: { type: "none", amount: 0, duration: 0 },
+                out: { type: "steady", duration: 500 },
+            },
+        },
+    };
+    ensureConfigDefaults();
+    syncCanvasLayoutLength();
+    document.getElementById("light-bar").innerHTML = "";
+    document.getElementById("custom-layout-view").innerHTML = "";
+    const bgDim = getBackgroundDimForPath(null);
+    renderLights(
+        new Array(config.channels).fill(
+            config.properties.pwm.min || DEFAULT_PWM_MIN,
+        ),
+        0,
+        bgDim,
+    );
+    document.getElementById("global-channels").value = config.channels;
+    activePath = null;
+    inspectorBuffer = null;
+    dirtyFields.clear();
+    renderTable();
+    renderInspector();
+    updateJsonPanel();
+    showToast("New project created", "success");
 }
 
 document.addEventListener("dragover", (e) => {
@@ -816,30 +945,43 @@ document.addEventListener("drop", (e) => {
 function toggleJsonModal() {
     const m = document.getElementById("json-modal");
     m.style.display = m.style.display === "flex" ? "none" : "flex";
-    if (m.style.display === "flex") updateJsonPanel();
+    if (m.style.display === "flex") {
+        updateJsonPanel();
+        showJsonValid();
+    }
 }
 
 // ==========================================================================
-// SETTINGS MODAL
+// PREFERENCES MODAL
+// User-specific settings, persisted to localStorage.
 // ==========================================================================
-function toggleSettingsModal() {
-    const m = document.getElementById("settings-modal");
+function togglePreferencesModal() {
+    const m = document.getElementById("preferences-modal");
     m.style.display = m.style.display === "flex" ? "none" : "flex";
     if (m.style.display === "flex") {
-        // Populate project settings
-        document.getElementById("settings-pwm-min").value =
-            config.pwmMin || DEFAULT_PWM_MIN;
-        document.getElementById("settings-pwm-max").value =
-            config.pwmMax || DEFAULT_PWM_MAX;
-        document.getElementById("settings-indicator-off-min").checked =
-            !!config.indicatorOffAtMin;
-        document.getElementById("settings-background-dim-pwm").value =
-            config.backgroundDimPWM || 0;
-        updateBackgroundDimPreview();
-
-        // Populate user preferences
         document.getElementById("settings-brush-increment").value =
             brushIncrement;
+        document.getElementById("settings-show-steps").checked = showSteps;
+    }
+}
+
+// ==========================================================================
+// PROJECT SETTINGS MODAL
+// Project-specific settings, persisted into config.properties.
+// ==========================================================================
+function toggleProjectSettingsModal() {
+    const m = document.getElementById("project-settings-modal");
+    m.style.display = m.style.display === "flex" ? "none" : "flex";
+    if (m.style.display === "flex") {
+        document.getElementById("settings-pwm-min").value =
+            config.properties.pwm.min || DEFAULT_PWM_MIN;
+        document.getElementById("settings-pwm-max").value =
+            config.properties.pwm.max || DEFAULT_PWM_MAX;
+        document.getElementById("settings-indicator-off-min").checked =
+            !!config.properties.pwm.indicatorOffAtMin;
+        document.getElementById("settings-background-dim-pwm").value =
+            config.properties.backgroundDim.pwm || 0;
+        updateBackgroundDimPreview();
 
         // Populate indicator color mode controls
         updateColorModeControls();
@@ -865,13 +1007,15 @@ function updatePwmRange() {
         showToast("Minimum must be less than maximum", "warn");
         return;
     }
-    config.pwmMin = newMin;
-    config.pwmMax = newMax;
+    config.properties.pwm.min = newMin;
+    config.properties.pwm.max = newMax;
     // Clamp existing state values
     clampStateValues();
     // Clamp brush brightness
-    if (brushBrightness < config.pwmMin) brushBrightness = config.pwmMin;
-    if (brushBrightness > config.pwmMax) brushBrightness = config.pwmMax;
+    if (brushBrightness < config.properties.pwm.min)
+        brushBrightness = config.properties.pwm.min;
+    if (brushBrightness > config.properties.pwm.max)
+        brushBrightness = config.properties.pwm.max;
     syncBrushWidgetStyles();
     // Update inspector sliders
     renderInspector();
@@ -887,7 +1031,7 @@ function updatePwmRange() {
         } else {
             renderLights(
                 new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
+                    config.properties.pwm.min || DEFAULT_PWM_MIN,
                 ),
                 0,
                 false,
@@ -901,7 +1045,7 @@ function updatePwmRange() {
 
 function toggleIndicatorOffAtMin() {
     const checkbox = document.getElementById("settings-indicator-off-min");
-    config.indicatorOffAtMin = checkbox.checked;
+    config.properties.pwm.indicatorOffAtMin = checkbox.checked;
     // Re-render preview
     if (!isPlaying) {
         if (activePath) {
@@ -913,7 +1057,7 @@ function toggleIndicatorOffAtMin() {
         } else {
             renderLights(
                 new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
+                    config.properties.pwm.min || DEFAULT_PWM_MIN,
                 ),
                 0,
                 false,
@@ -929,9 +1073,9 @@ function toggleIndicatorOffAtMin() {
 function updateBackgroundDimPWM(val) {
     let parsed = parseInt(val);
     if (isNaN(parsed) || parsed < 0) parsed = 0;
-    if (parsed > (config.pwmMax || DEFAULT_PWM_MAX))
-        parsed = config.pwmMax || DEFAULT_PWM_MAX;
-    config.backgroundDimPWM = parsed;
+    if (parsed > (config.properties.pwm.max || DEFAULT_PWM_MAX))
+        parsed = config.properties.pwm.max || DEFAULT_PWM_MAX;
+    config.properties.backgroundDim.pwm = parsed;
     updateJsonPanel();
     // Update preview if active pattern
     if (!isPlaying) {
@@ -944,7 +1088,7 @@ function updateBackgroundDimPWM(val) {
         } else {
             renderLights(
                 new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
+                    config.properties.pwm.min || DEFAULT_PWM_MIN,
                 ),
                 0,
                 false,
@@ -959,9 +1103,9 @@ function updateBackgroundDimPWM(val) {
 function updateBackgroundDimPreview() {
     const previewContainer = document.getElementById("bg-dim-preview");
     if (!previewContainer) return;
-    const bgPWM = config.backgroundDimPWM || 0;
-    const maxPWM = config.pwmMax || DEFAULT_PWM_MAX;
-    const minPWM = config.pwmMin || DEFAULT_PWM_MIN;
+    const bgPWM = config.properties.backgroundDim.pwm || 0;
+    const maxPWM = config.properties.pwm.max || DEFAULT_PWM_MAX;
+    const minPWM = config.properties.pwm.min || DEFAULT_PWM_MIN;
     // Three states: OFF (0), Background Dim (bgPWM), ON (maxPWM)
     const states = [0, bgPWM, maxPWM];
     const labels = ["OFF", "BG Dim", "ON"];
@@ -1002,18 +1146,23 @@ function updateBackgroundDimPreview() {
 // INDICATOR COLOR MODE CONTROLS (Settings)
 // ==========================================================================
 function setColorMode(mode) {
-    if (mode === config.indicatorColorMode) return;
+    if (mode === config.properties.indicator.mode) return;
     if (mode === "global") {
         // Switch to global: use the first channel's color (or most common if all same)
-        const colors = config.indicatorColors;
+        const colors = config.properties.indicator.channelColors;
         const allSame = colors.every((c) => c === colors[0]);
-        config.indicatorColor = allSame ? colors[0] : colors[0]; // could use most common, but we'll use first
-        config.indicatorColorMode = "global";
+        config.properties.indicator.globalColor = allSame
+            ? colors[0]
+            : colors[0]; // could use most common, but we'll use first
+        config.properties.indicator.mode = "global";
     } else {
         // Switch to per-channel: populate all channels with current global color
-        const globalColor = config.indicatorColor || default_color;
-        config.indicatorColors = new Array(config.channels).fill(globalColor);
-        config.indicatorColorMode = "per-channel";
+        const globalColor =
+            config.properties.indicator.globalColor || default_color;
+        config.properties.indicator.channelColors = new Array(
+            config.channels,
+        ).fill(globalColor);
+        config.properties.indicator.mode = "per-channel";
     }
     updateColorModeControls();
     refreshAll();
@@ -1023,11 +1172,12 @@ function setColorMode(mode) {
 function updateColorModeControls() {
     const container = document.getElementById("color-mode-controls");
     if (!container) return;
-    const mode = config.indicatorColorMode;
+    const mode = config.properties.indicator.mode;
     let html = "";
 
     if (mode === "global") {
-        const currentColor = config.indicatorColor || default_color;
+        const currentColor =
+            config.properties.indicator.globalColor || default_color;
         html = `
             <div style="margin-top: 5px;">
                 <div class="swatch-picker-container" data-slot="global">
@@ -1040,7 +1190,8 @@ function updateColorModeControls() {
         // Per-channel: chips
         let chipsHtml = "";
         for (let i = 0; i < config.channels; i++) {
-            const color = config.indicatorColors[i] || default_color;
+            const color =
+                config.properties.indicator.channelColors[i] || default_color;
             chipsHtml += `
                 <div class="channel-chip" data-channel="${i}" style="
                     display: inline-block;
@@ -1172,7 +1323,7 @@ function createColorSwatchPickerHTML(currentColor, slotId) {
 }
 
 function handleSwatchColorChange(color) {
-    config.indicatorColor = color;
+    config.properties.indicator.globalColor = color;
     refreshAll();
     updateJsonPanel();
 }
@@ -1195,7 +1346,7 @@ function refreshAll() {
         } else {
             renderLights(
                 new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
+                    config.properties.pwm.min || DEFAULT_PWM_MIN,
                 ),
                 0,
                 false,
@@ -1384,13 +1535,16 @@ function updateGlobalChannels(val) {
     let n = parseInt(val) || 1;
     config.channels = n;
     // adjust indicatorColors
-    if (!config.indicatorColors) config.indicatorColors = [];
-    while (config.indicatorColors.length < n)
-        config.indicatorColors.push(default_color);
-    if (config.indicatorColors.length > n)
-        config.indicatorColors = config.indicatorColors.slice(0, n);
+    if (!config.properties.indicator.channelColors)
+        config.properties.indicator.channelColors = [];
+    while (config.properties.indicator.channelColors.length < n)
+        config.properties.indicator.channelColors.push(default_color);
+    if (config.properties.indicator.channelColors.length > n)
+        config.properties.indicator.channelColors =
+            config.properties.indicator.channelColors.slice(0, n);
     // if global mode, ensure indicatorColor exists
-    if (!config.indicatorColor) config.indicatorColor = default_color;
+    if (!config.properties.indicator.globalColor)
+        config.properties.indicator.globalColor = default_color;
 
     syncCanvasLayoutLength();
     const fixLength = (p) => {
@@ -1406,7 +1560,10 @@ function updateGlobalChannels(val) {
     renderTable();
 
     // also update settings if open
-    if (document.getElementById("settings-modal").style.display === "flex") {
+    if (
+        document.getElementById("project-settings-modal").style.display ===
+        "flex"
+    ) {
         updateColorModeControls();
     }
 }
@@ -1444,12 +1601,12 @@ function syncBrushWidgetStyles() {
     const inputField = document.getElementById("global-brush-val");
     if (inputField && document.activeElement !== inputField) {
         inputField.value = brushBrightness;
-        inputField.min = config.pwmMin || DEFAULT_PWM_MIN;
-        inputField.max = config.pwmMax || DEFAULT_PWM_MAX;
+        inputField.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+        inputField.max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     }
     const scrollBox = document.getElementById("paint-tool-scroll-box");
     if (scrollBox) {
-        const max = config.pwmMax || DEFAULT_PWM_MAX;
+        const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
         const intensity = Math.min(1, brushBrightness / max);
         scrollBox.style.backgroundColor = `rgba(255, 42, 42, ${intensity})`;
     }
@@ -1459,8 +1616,8 @@ function handleBrushWidgetWheel(event) {
     if (activeTool === "erase") return;
     event.preventDefault();
     let step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     let next = Math.min(max, Math.max(min, brushBrightness + step));
     brushBrightness = Math.round(next);
     syncBrushWidgetStyles();
@@ -1471,8 +1628,8 @@ function handleManualBrushInput(val) {
     if (activeTool === "erase") return;
     let parsed = parseFloat(val);
     if (isNaN(parsed)) return;
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     brushBrightness = Math.round(Math.min(max, Math.max(min, parsed)));
     syncBrushWidgetStyles();
     renderInspector();
@@ -1483,8 +1640,8 @@ function toggleBrushPresetsMenu(e) {
     e.stopPropagation();
     const pop = document.getElementById("brush-presets-popup");
     // Populate presets based on current min/max
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const range = max - min;
     const presets = [
         { label: "10%", value: min + range * 0.1 },
@@ -1540,11 +1697,13 @@ function paintTargetCellNode(path, si) {
     if (activeTool === "paint") {
         p.state[si] = brushBrightness;
     } else if (activeTool === "erase") {
-        p.state[si] = config.pwmMin || DEFAULT_PWM_MIN;
+        p.state[si] = config.properties.pwm.min || DEFAULT_PWM_MIN;
     } else if (activeTool === "hybrid") {
         let current = Math.round(parseFloat(p.state[si]) || 0);
-        const min = config.pwmMin || DEFAULT_PWM_MIN;
-        const isOn = config.indicatorOffAtMin ? current > min : current > 0;
+        const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+        const isOn = config.properties.pwm.indicatorOffAtMin
+            ? current > min
+            : current > 0;
         if (isOn) {
             if (current === brushBrightness) {
                 p.state[si] = min; // turn off to minimum
@@ -1883,7 +2042,7 @@ function selectInspectorChannel(si) {
         } else {
             renderLights(
                 new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
+                    config.properties.pwm.min || DEFAULT_PWM_MIN,
                 ),
                 0,
                 false,
@@ -1896,8 +2055,8 @@ function updateInspectorChannelVolume(si, val) {
     if (si === -1) return;
     let num = parseFloat(val);
     if (isNaN(num)) num = 0;
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     if (num < min) num = min;
     if (num > max) num = max;
     num = Math.round(num);
@@ -1940,15 +2099,15 @@ function updateInspectorChannelVolume(si, val) {
     const rangeInput = document.getElementById("inspector-dimmer-range");
     if (rangeInput && rangeInput !== document.activeElement) {
         rangeInput.value = num;
-        rangeInput.min = config.pwmMin || DEFAULT_PWM_MIN;
-        rangeInput.max = config.pwmMax || DEFAULT_PWM_MAX;
+        rangeInput.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+        rangeInput.max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     }
 
     const numberInput = document.getElementById("inspector-dimmer-number");
     if (numberInput && numberInput !== document.activeElement) {
         numberInput.value = num;
-        numberInput.min = config.pwmMin || DEFAULT_PWM_MIN;
-        numberInput.max = config.pwmMax || DEFAULT_PWM_MAX;
+        numberInput.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+        numberInput.max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     }
 
     const blockNode = document.getElementById(`inspector-ch-block-${si}`);
@@ -2032,7 +2191,7 @@ function renderDefaultInspector() {
                         Enabled
                     </label>
                     <div style="font-size: 10px; color: #666; margin-top: 4px;">
-                        Global PWM: ${config.backgroundDimPWM || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
+                        Global PWM: ${config.properties.backgroundDim.pwm || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
                     </div>
                 </div>
             `;
@@ -2235,8 +2394,8 @@ function renderInspector() {
         resetBtnHtml = `<button class="btn-compact" style="padding: 2px 6px; font-size: 10px; background: #444; margin-left: auto;" onclick="resetInspectorChannelToUnchanged(${activeInspectorChannel})">RESET</button>`;
     }
 
-    const min = config.pwmMin || DEFAULT_PWM_MIN;
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
 
     let dimmerControlHtml = `
                 <div style="margin-top: 14px; background: #222; padding: 10px; border-radius: 4px; border: 1px solid #333;">
@@ -2263,7 +2422,7 @@ function renderInspector() {
                         Enabled
                     </label>
                     <div style="font-size: 10px; color: #666; margin-top: 4px;">
-                        Global PWM: ${config.backgroundDimPWM || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
+                        Global PWM: ${config.properties.backgroundDim.pwm || 0} &nbsp;|&nbsp; OFF channels will output this value when enabled.
                     </div>
                 </div>
             `;
@@ -2567,7 +2726,7 @@ async function playSinglePattern(p, path) {
                 f % 2 === 0
                     ? p.state
                     : new Array(config.channels).fill(
-                          config.pwmMin || DEFAULT_PWM_MIN,
+                          config.properties.pwm.min || DEFAULT_PWM_MIN,
                       ),
                 0,
                 bgDimEnabled,
@@ -2579,7 +2738,9 @@ async function playSinglePattern(p, path) {
 
     if (p.phases.out.type === "fade" && p.phases.out.duration > 0) {
         renderLights(
-            new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+            new Array(config.channels).fill(
+                config.properties.pwm.min || DEFAULT_PWM_MIN,
+            ),
             p.phases.out.duration,
             bgDimEnabled,
         );
@@ -2603,7 +2764,9 @@ function stopStrobe() {
     document.getElementById("playback-icon").src = "/assets/play.svg";
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        new Array(config.channels).fill(
+            config.properties.pwm.min || DEFAULT_PWM_MIN,
+        ),
         0,
         bgDim,
     );
@@ -2743,7 +2906,7 @@ function duplicateGroup(gIdx) {
 }
 
 function invertGroup(gIdx) {
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     config.patterns[gIdx].patterns.forEach((p) => {
         p.state = p.state.map((s) => {
             let val = Math.round(parseFloat(s) || 0);
@@ -2762,7 +2925,7 @@ function addPattern() {
     // Deep clone defaultPattern and add state array
     const newPattern = JSON.parse(JSON.stringify(config.defaultPattern));
     newPattern.state = new Array(config.channels).fill(
-        config.pwmMin || DEFAULT_PWM_MIN,
+        config.properties.pwm.min || DEFAULT_PWM_MIN,
     );
     config.patterns.push(newPattern);
     renderTable();
@@ -2776,7 +2939,7 @@ function duplicateRow(path) {
 }
 
 function invertRow(path, render = true) {
-    const max = config.pwmMax || DEFAULT_PWM_MAX;
+    const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     let p = getObjByPath(path);
     p.state = p.state.map((s) => {
         let val = Math.round(parseFloat(s) || 0);
@@ -2938,34 +3101,88 @@ function updateJsonPanel() {
     updateUndoRedoButtons();
 }
 
-function handleManualJsonEdit(val) {
+// ==========================================================================
+// JSON VALIDATION STATUS BAR
+// ==========================================================================
+function getJsonErrorLine(text, position) {
+    return text.substring(0, position).split("\n").length;
+}
+
+function showJsonValid() {
+    const bar = document.getElementById("json-status-bar");
+    if (!bar) return;
+    bar.classList.remove("status-error");
+    bar.classList.add("status-valid");
+    bar.textContent = "✓ Valid JSON";
+}
+
+function showJsonError(err) {
+    const bar = document.getElementById("json-status-bar");
+    if (!bar) return;
+    bar.classList.remove("status-valid");
+    bar.classList.add("status-error");
+    let message = err && err.message ? err.message : "Invalid JSON";
+    const match = message.match(/position (\d+)/);
+    if (match) {
+        const line = getJsonErrorLine(
+            document.getElementById("json-input").value,
+            parseInt(match[1]),
+        );
+        message += ` (line ${line})`;
+    }
+    bar.textContent = `❌ ${message}`;
+}
+
+function formatJson() {
+    const jsonInput = document.getElementById("json-input");
     try {
-        const p = JSON.parse(val);
-        if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
-            config = p;
-            ensureConfigDefaults(); // migrates colors
-            config = migrateConfigToPWM(config);
-            if (!config._strobe_editor_version)
-                config._strobe_editor_version = "1";
-            syncCanvasLayoutLength();
-            document.getElementById("light-bar").innerHTML = "";
-            document.getElementById("custom-layout-view").innerHTML = "";
-            const bgDim = getBackgroundDimForPath(activePath);
-            renderLights(
-                new Array(config.channels).fill(
-                    config.pwmMin || DEFAULT_PWM_MIN,
-                ),
-                0,
-                bgDim,
-            );
-            document.getElementById("global-channels").value = config.channels;
-            activePath = null;
-            inspectorBuffer = null;
-            dirtyFields.clear();
-            renderTable();
-            renderInspector();
-        }
-    } catch (e) {}
+        const obj = JSON.parse(jsonInput.value);
+        jsonInput.value = JSON.stringify(obj, null, 2);
+        showJsonValid();
+    } catch (err) {
+        showToast("Cannot format invalid JSON", "warn");
+        showJsonError(err);
+    }
+}
+
+function handleManualJsonEdit(val) {
+    let p;
+    try {
+        p = JSON.parse(val);
+    } catch (err) {
+        showJsonError(err);
+        return;
+    }
+    if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
+        config = p;
+        ensureConfigDefaults(); // migrates colors & properties
+        config = migrateConfigToPWM(config);
+        if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+        syncCanvasLayoutLength();
+        document.getElementById("light-bar").innerHTML = "";
+        document.getElementById("custom-layout-view").innerHTML = "";
+        const bgDim = getBackgroundDimForPath(activePath);
+        renderLights(
+            new Array(config.channels).fill(
+                config.properties.pwm.min || DEFAULT_PWM_MIN,
+            ),
+            0,
+            bgDim,
+        );
+        document.getElementById("global-channels").value = config.channels;
+        activePath = null;
+        inspectorBuffer = null;
+        dirtyFields.clear();
+        renderTable();
+        renderInspector();
+        showJsonValid();
+    } else {
+        showJsonError(
+            new Error(
+                "Config must include numeric 'channels' and 'patterns' array",
+            ),
+        );
+    }
 }
 const sleep = (ms, sig) =>
     new Promise((res, rej) => {
@@ -3057,7 +3274,9 @@ function setPreviewMode(mode) {
         }
     } else {
         renderLights(
-            new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+            new Array(config.channels).fill(
+                config.properties.pwm.min || DEFAULT_PWM_MIN,
+            ),
             0,
             false,
         );
@@ -3095,7 +3314,9 @@ function setCanvasItemShape(shape) {
     renderLights(
         isPlaying
             ? currentLightState
-            : new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+            : new Array(config.channels).fill(
+                  config.properties.pwm.min || DEFAULT_PWM_MIN,
+              ),
         false,
     );
 }
@@ -3168,7 +3389,9 @@ function resetIndicatorPositions() {
     renderLights(
         isPlaying
             ? currentLightState
-            : new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+            : new Array(config.channels).fill(
+                  config.properties.pwm.min || DEFAULT_PWM_MIN,
+              ),
         false,
     );
     showToast("Indicator positions reset", "success");
@@ -3183,7 +3406,7 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     if (!bar || !customView) return;
 
     // Compute output state with background dimming
-    const bgPWM = config.backgroundDimPWM || 0;
+    const bgPWM = config.properties.backgroundDim.pwm || 0;
     const outputState = state.map((val) => {
         const num = parseFloat(val) || 0;
         if (num === 0 && bgDimEnabled) {
@@ -3352,10 +3575,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!config._strobe_editor_version) config._strobe_editor_version = "1";
     // ensure indicatorColors are correct
     if (
-        !config.indicatorColors ||
-        config.indicatorColors.length !== config.channels
+        !config.properties.indicator.channelColors ||
+        config.properties.indicator.channelColors.length !== config.channels
     ) {
-        config.indicatorColors = new Array(config.channels).fill(default_color);
+        config.properties.indicator.channelColors = new Array(
+            config.channels,
+        ).fill(default_color);
     }
     loadCanvasLayoutData();
     if (historyStack.length === 0 || historyIndex === -1) {
@@ -3366,7 +3591,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("global-channels").value = config.channels;
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(config.pwmMin || DEFAULT_PWM_MIN),
+        new Array(config.channels).fill(
+            config.properties.pwm.min || DEFAULT_PWM_MIN,
+        ),
         0,
         bgDim,
     );
