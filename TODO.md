@@ -16,12 +16,33 @@ FEATURES
 - [ ] Minify inspector
 - [ ] "Awa Strobes" logo
 - [ ] Better sync indicator
-- [ ] More visible guides (maybe add a button) (Shift + /)
 - [ ] Display properties like version in the Settings tab or a seperate tab
-- [ ] combine multiple channels into one indicator (for example channel 1: red, 2: white, 3: blue) into one indicator that can display 3 colors but in the circuit still be one indicator
+- [ ] Combine multiple channels into one indicator (for example channel 1: red, 2: white, 3: blue) into one indicator that can display 3 colors but in the circuit still be one indicator
+
+# Free form editor
+
+- [ ] Grouping (position and shapes)
+- [ ] Multi select
+- [ ] Drag to select
+- [ ] Align
+- [ ] Distribute
+- [ ] Snap to grid (on/off)
+- [ ] Show grid (on/off)
+- [ ] Show/hide numbers
+- [x] Reset position
 
 ========================================
-BUGS
+QUALITY OF LIFE
+========================================
+
+- [ ] Pattern group should have a default repeat and bounce toggle
+- [ ] In select mode, clicking a group should select all pattern in group and show inspector for those selected patterns instead of showing inspector for the group which only has repeat and bounce which can already be accessed via the pattern editor.
+- [ ] In edit mode, pressing ESC when a pattern is selected should unselect it (in order to access default pattern inspector)
+- [ ] Dragging to toggle channels on pattern rows should not allow the cursor to select random elements
+- [ ] More visible guides (maybe add a button) (Shift + /)
+
+========================================
+ISSUES
 ========================================
 
 - [ ] Background dim not working on select mode for multiple patterns
