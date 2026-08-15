@@ -8,6 +8,100 @@
 // to find a specific area of functionality.
 // ============================================================================
 
+// @ts-check
+
+/**
+ * @typedef {Object} PWMConfig
+ * @property {number} min - Minimum PWM value (0-1023)
+ * @property {number} max - Maximum PWM value (0-1023)
+ * @property {boolean} indicatorOffAtMin - Whether indicator shows as off at min value
+ */
+
+/**
+ * @typedef {Object} BackgroundDimConfig
+ * @property {number} pwm - PWM value for background dim (0-1023)
+ */
+
+/**
+ * @typedef {Object} IndicatorConfig
+ * @property {"global"|"per-channel"} mode - Color mode
+ * @property {string} globalColor - Hex color when mode is "global"
+ * @property {string[]} channelColors - Per-channel hex colors when mode is "per-channel"
+ */
+
+/**
+ * @typedef {Object} ProjectProperties
+ * @property {PWMConfig} pwm
+ * @property {BackgroundDimConfig} backgroundDim
+ * @property {IndicatorConfig} indicator
+ * @property {string} ipAddress - ESP32 WebSocket IP address
+ * @property {(number|null)[]} pinsMapping - GPIO pin per channel (null = unmapped)
+ */
+
+/**
+ * @typedef {Object} PhaseConfig
+ * @property {"none"|"fade"|"steady"|"flicker"} type
+ * @property {number} duration - Duration in milliseconds
+ * @property {number} [amount] - Flicker amount (only for type "flicker")
+ */
+
+/**
+ * @typedef {Object} PatternPhases
+ * @property {PhaseConfig} in
+ * @property {PhaseConfig} anim
+ * @property {PhaseConfig} out
+ */
+
+/**
+ * @typedef {Object} BasePattern
+ * @property {boolean} backgroundDim
+ * @property {PatternPhases} phases
+ * @property {number[]} state - PWM values per channel (0-1023)
+ */
+
+/**
+ * @typedef {BasePattern & {type?: never}} Pattern
+ */
+
+/**
+ * @typedef {Object} GroupPattern
+ * @property {"group"} type
+ * @property {number} repeat
+ * @property {boolean} bounce
+ * @property {Pattern[]} patterns
+ */
+
+/**
+ * @typedef {Pattern | GroupPattern} PatternItem
+ */
+
+/**
+ * @typedef {Object} DefaultPattern
+ * @property {boolean} backgroundDim
+ * @property {PatternPhases} phases
+ */
+
+/**
+ * @typedef {Object} Config
+ * @property {string} _strobe_editor_version
+ * @property {number} channels
+ * @property {ProjectProperties} properties
+ * @property {DefaultPattern} defaultPattern
+ * @property {PatternItem[]} patterns
+ */
+
+/**
+ * @typedef {Object} CanvasLayoutNode
+ * @property {number} x - Percentage (0-100)
+ * @property {number} y - Percentage (0-100)
+ * @property {"circle"|"square"|"rectangle"} shape
+ */
+
+/**
+ * @typedef {Object} HistoryEntry
+ * @property {string} json - Serialized config snapshot
+ */
+
 // ============================================================================
 // GLOBAL STATE
 // ============================================================================
