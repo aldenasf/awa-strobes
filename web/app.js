@@ -10,6 +10,47 @@
 
 // @ts-check
 
+const version = "1";
+const default_color = "#ff2a2a";
+const DEFAULT_PWM_MIN = 0;
+const DEFAULT_PWM_MAX = 255;
+
+function getDefaultConfig() {
+    return {
+        _strobe_editor_version: "1",
+        channels: 10,
+        properties: {
+            pwm: {
+                min: DEFAULT_PWM_MIN,
+                max: DEFAULT_PWM_MAX,
+                indicatorOffAtMin: false,
+            },
+            backgroundDim: {
+                pwm: 50,
+            },
+            indicator: {
+                mode: "global", // "global" or "per-channel"
+                globalColor: default_color, // used when mode is "global"
+                channelColors: [], // used when mode is "per-channel"
+            },
+        },
+        defaultPattern: {
+            backgroundDim: false,
+            phases: {
+                in: { type: "none", duration: 0 },
+                anim: { type: "flicker", amount: 5, duration: 500 },
+                out: { type: "none", duration: 0 },
+            },
+        },
+        patterns: [],
+    };
+}
+
+let config = getDefaultConfig();
+
+/** @type {number[]} Current light state being displayed (for canvas reset during playback) */
+let currentLightState = [];
+
 /**
  * @typedef {Object} PWMConfig
  * @property {number} min - Minimum PWM value (0-1023)
@@ -105,47 +146,6 @@
 // ============================================================================
 // GLOBAL STATE
 // ============================================================================
-
-const version = "1";
-const default_color = "#ff2a2a";
-const DEFAULT_PWM_MIN = 0;
-const DEFAULT_PWM_MAX = 255;
-
-function getDefaultConfig() {
-    return {
-        _strobe_editor_version: "1",
-        channels: 10,
-        properties: {
-            pwm: {
-                min: DEFAULT_PWM_MIN,
-                max: DEFAULT_PWM_MAX,
-                indicatorOffAtMin: false,
-            },
-            backgroundDim: {
-                pwm: 50,
-            },
-            indicator: {
-                mode: "global", // "global" or "per-channel"
-                globalColor: default_color, // used when mode is "global"
-                channelColors: [], // used when mode is "per-channel"
-            },
-        },
-        defaultPattern: {
-            backgroundDim: false,
-            phases: {
-                in: { type: "none", duration: 0 },
-                anim: { type: "flicker", amount: 5, duration: 500 },
-                out: { type: "none", duration: 0 },
-            },
-        },
-        patterns: [],
-    };
-}
-
-let config = getDefaultConfig();
-
-/** @type {number[]} Current light state being displayed (for canvas reset during playback) */
-let currentLightState = [];
 
 let appMode = "edit";
 let showSteps = localStorage.getItem("strobe_show_steps") !== "false";
