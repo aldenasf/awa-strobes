@@ -10,14 +10,14 @@
 
 // @ts-check
 
-const version = "1";
-const default_color = "#ff2a2a";
+const version = '1';
+const default_color = '#ff2a2a';
 const DEFAULT_PWM_MIN = 0;
 const DEFAULT_PWM_MAX = 255;
 
 function getDefaultConfig() {
     return {
-        _strobe_editor_version: "1",
+        _strobe_editor_version: '1',
         channels: 10,
         properties: {
             pwm: {
@@ -29,7 +29,7 @@ function getDefaultConfig() {
                 pwm: 50,
             },
             indicator: {
-                mode: "global", // "global" or "per-channel"
+                mode: 'global', // "global" or "per-channel"
                 globalColor: default_color, // used when mode is "global"
                 channelColors: [], // used when mode is "per-channel"
             },
@@ -37,9 +37,9 @@ function getDefaultConfig() {
         defaultPattern: {
             backgroundDim: false,
             phases: {
-                in: { type: "none", duration: 0 },
-                anim: { type: "flicker", amount: 5, duration: 500 },
-                out: { type: "none", duration: 0 },
+                in: { type: 'none', duration: 0 },
+                anim: { type: 'flicker', amount: 5, duration: 500 },
+                out: { type: 'none', duration: 0 },
             },
         },
         patterns: [],
@@ -147,8 +147,8 @@ let currentLightState = [];
 // GLOBAL STATE
 // ============================================================================
 
-let appMode = "edit";
-let showSteps = localStorage.getItem("strobe_show_steps") !== "false";
+let appMode = 'edit';
+let showSteps = localStorage.getItem('strobe_show_steps') !== 'false';
 let selectedPaths = new Set();
 let isDraggingSelection = false;
 let dragTargetState = null;
@@ -165,12 +165,12 @@ let currentPickerContext = null;
 let selectionHistoryStack = [];
 
 // Preview Mode & Custom Canvas Layout Configuration Properties
-let previewMode = "bar";
+let previewMode = 'bar';
 let canvasLayoutData = [];
 let draggedChannelIdx = null;
 
 // Painting Tools Dynamic State Settings
-let activeTool = "hybrid";
+let activeTool = 'hybrid';
 let brushBrightness = DEFAULT_PWM_MAX;
 
 // brushIncrement is now stored in localStorage (user preference)
@@ -183,8 +183,7 @@ let isNativePickerOpen = false; // prevents closing popup while native picker is
 let inspectorBuffer = null;
 const dirtyFields = new Set();
 
-let historyStack =
-    JSON.parse(localStorage.getItem(`strobe_history_v${version}`)) || [];
+let historyStack = JSON.parse(localStorage.getItem(`strobe_history_v${version}`)) || [];
 let historyIndex =
     localStorage.getItem(`strobe_history_index_v${version}`) !== null
         ? parseInt(localStorage.getItem(`strobe_history_index_v${version}`))
@@ -196,18 +195,24 @@ let isUndoRedoAction = false;
 // TOAST NOTIFICATIONS
 // Small popup messages shown to the user (via Toastify).
 // ==========================================================================
-function showToast(msg, type = "info") {
-    let color = "linear-gradient(to right, #007bff, #0056b3)";
-    if (type === "history") {color = "#cc9a05";}
-    if (type === "success") {color = "#28a745";}
-    if (type === "warn") {color = "#dc3545";}
+function showToast(msg, type = 'info') {
+    let color = 'linear-gradient(to right, #007bff, #0056b3)';
+    if (type === 'history') {
+        color = '#cc9a05';
+    }
+    if (type === 'success') {
+        color = '#28a745';
+    }
+    if (type === 'warn') {
+        color = '#dc3545';
+    }
     Toastify({
         text: msg,
         duration: 2000,
-        gravity: "top",
-        position: "right",
+        gravity: 'top',
+        position: 'right',
         stopOnFocus: true,
-        style: { background: color, color: "#ffffff" },
+        style: { background: color, color: '#ffffff' },
     }).showToast();
 }
 
@@ -222,27 +227,29 @@ function migratePattern(p) {
         p.phases = {
             in:
                 p.fade && p.fade.in > 0
-                    ? { type: "fade", duration: p.fade.in }
-                    : { type: "none", duration: 0 },
+                    ? { type: 'fade', duration: p.fade.in }
+                    : { type: 'none', duration: 0 },
             anim: hasFlicker
                 ? {
-                      type: "flicker",
+                      type: 'flicker',
                       amount: p.flicker.amount,
                       duration: p.flicker.duration || dur,
                   }
-                : { type: "none", duration: 0, amount: 0 },
+                : { type: 'none', duration: 0, amount: 0 },
             out:
                 p.fade && p.fade.out > 0
-                    ? { type: "fade", duration: p.fade.out }
+                    ? { type: 'fade', duration: p.fade.out }
                     : hasFlicker
-                      ? { type: "none", duration: 0 }
-                      : { type: "steady", duration: dur },
+                      ? { type: 'none', duration: 0 }
+                      : { type: 'steady', duration: dur },
         };
         delete p.duration;
         delete p.flicker;
         delete p.fade;
     }
-    if (p.backgroundDim === undefined) {p.backgroundDim = false;}
+    if (p.backgroundDim === undefined) {
+        p.backgroundDim = false;
+    }
     return p;
 }
 
@@ -256,13 +263,15 @@ function migratePattern(p) {
 // untouched.
 // ==========================================================================
 function collectStateValues(patterns, out = []) {
-    (patterns || []).forEach((p) => {
-        if (p.type === "group") {
+    (patterns || []).forEach(p => {
+        if (p.type === 'group') {
             collectStateValues(p.patterns, out);
         } else if (Array.isArray(p.state)) {
-            p.state.forEach((v) => {
+            p.state.forEach(v => {
                 const n = parseFloat(v);
-                if (!isNaN(n)) {out.push(n);}
+                if (!isNaN(n)) {
+                    out.push(n);
+                }
             });
         }
     });
@@ -271,11 +280,11 @@ function collectStateValues(patterns, out = []) {
 
 function scaleStatesToPWM(patterns) {
     const maxVal = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    (patterns || []).forEach((p) => {
-        if (p.type === "group") {
+    (patterns || []).forEach(p => {
+        if (p.type === 'group') {
             scaleStatesToPWM(p.patterns);
         } else if (Array.isArray(p.state)) {
-            p.state = p.state.map((v) => {
+            p.state = p.state.map(v => {
                 const n = parseFloat(v) || 0;
                 return Math.round(n * maxVal);
             });
@@ -285,8 +294,7 @@ function scaleStatesToPWM(patterns) {
 
 function migrateConfigToPWM(cfg) {
     const values = collectStateValues(cfg.patterns);
-    const isLegacyNormalized =
-        values.length > 0 && values.every((v) => v >= 0 && v <= 1);
+    const isLegacyNormalized = values.length > 0 && values.every(v => v >= 0 && v <= 1);
     if (isLegacyNormalized) {
         scaleStatesToPWM(cfg.patterns);
     }
@@ -314,7 +322,7 @@ function migrateConfigProperties(cfg) {
             },
 
             indicator: {
-                mode: cfg.indicatorColorMode ?? "per-channel",
+                mode: cfg.indicatorColorMode ?? 'per-channel',
                 globalColor: cfg.indicatorColor ?? default_color,
                 channelColors: cfg.indicatorColors ?? cfg.colors ?? [],
             },
@@ -340,11 +348,18 @@ function ensureConfigDefaults() {
     migrateConfigProperties(config);
     const props = config.properties;
 
-    if (props.pwm.min === undefined) {props.pwm.min = DEFAULT_PWM_MIN;}
-    if (props.pwm.max === undefined) {props.pwm.max = DEFAULT_PWM_MAX;}
-    if (props.pwm.indicatorOffAtMin === undefined)
-        {props.pwm.indicatorOffAtMin = false;}
-    if (props.backgroundDim.pwm === undefined) {props.backgroundDim.pwm = 0;}
+    if (props.pwm.min === undefined) {
+        props.pwm.min = DEFAULT_PWM_MIN;
+    }
+    if (props.pwm.max === undefined) {
+        props.pwm.max = DEFAULT_PWM_MAX;
+    }
+    if (props.pwm.indicatorOffAtMin === undefined) {
+        props.pwm.indicatorOffAtMin = false;
+    }
+    if (props.backgroundDim.pwm === undefined) {
+        props.backgroundDim.pwm = 0;
+    }
     // clamp min < max
     if (props.pwm.min >= props.pwm.max) {
         props.pwm.min = DEFAULT_PWM_MIN;
@@ -353,36 +368,34 @@ function ensureConfigDefaults() {
 
     // --- Indicator color migration & defaults ---
     if (!props.indicator.channelColors) {
-        props.indicator.channelColors = new Array(config.channels).fill(
-            default_color,
-        );
+        props.indicator.channelColors = new Array(config.channels).fill(default_color);
     }
     if (!props.indicator.mode) {
-        props.indicator.mode = "per-channel";
+        props.indicator.mode = 'per-channel';
     }
     if (!props.indicator.globalColor) {
-        props.indicator.globalColor =
-            props.indicator.channelColors[0] || default_color;
+        props.indicator.globalColor = props.indicator.channelColors[0] || default_color;
     }
     // ensure channelColors length matches channels
     while (props.indicator.channelColors.length < config.channels) {
         props.indicator.channelColors.push(default_color);
     }
     if (props.indicator.channelColors.length > config.channels) {
-        props.indicator.channelColors = props.indicator.channelColors.slice(
-            0,
-            config.channels,
-        );
+        props.indicator.channelColors = props.indicator.channelColors.slice(0, config.channels);
     }
 
     // ensure each pattern has backgroundDim
-    (config.patterns || []).forEach((item) => {
-        if (item.type === "group") {
-            item.patterns.forEach((p) => {
-                if (p.backgroundDim === undefined) {p.backgroundDim = false;}
+    (config.patterns || []).forEach(item => {
+        if (item.type === 'group') {
+            item.patterns.forEach(p => {
+                if (p.backgroundDim === undefined) {
+                    p.backgroundDim = false;
+                }
             });
         } else {
-            if (item.backgroundDim === undefined) {item.backgroundDim = false;}
+            if (item.backgroundDim === undefined) {
+                item.backgroundDim = false;
+            }
         }
     });
     // ensure defaultPattern exists
@@ -390,25 +403,30 @@ function ensureConfigDefaults() {
         config.defaultPattern = {
             backgroundDim: false,
             phases: {
-                in: { type: "none", duration: 0 },
-                anim: { type: "none", amount: 0, duration: 0 },
-                out: { type: "steady", duration: 500 },
+                in: { type: 'none', duration: 0 },
+                anim: { type: 'none', amount: 0, duration: 0 },
+                out: { type: 'steady', duration: 500 },
             },
         };
     }
     // ensure defaultPattern.phases exist
     if (!config.defaultPattern.phases) {
         config.defaultPattern.phases = {
-            in: { type: "none", duration: 0 },
-            anim: { type: "none", amount: 0, duration: 0 },
-            out: { type: "steady", duration: 500 },
+            in: { type: 'none', duration: 0 },
+            anim: { type: 'none', amount: 0, duration: 0 },
+            out: { type: 'steady', duration: 500 },
         };
     }
-    if (config.defaultPattern.backgroundDim === undefined)
-        {config.defaultPattern.backgroundDim = false;}
+    if (config.defaultPattern.backgroundDim === undefined) {
+        config.defaultPattern.backgroundDim = false;
+    }
 
-    if (props.ipAddress === undefined) {props.ipAddress = "192.168.4.1";}
-    if (!Array.isArray(props.pinsMapping)) {props.pinsMapping = [];}
+    if (props.ipAddress === undefined) {
+        props.ipAddress = '192.168.4.1';
+    }
+    if (!Array.isArray(props.pinsMapping)) {
+        props.pinsMapping = [];
+    }
     // Ensure length matches channels
     syncPinsMappingLength();
 }
@@ -420,13 +438,10 @@ function ensureConfigDefaults() {
 // current indicator color mode.
 // ==========================================================================
 function getEffectiveColor(channelIdx) {
-    if (config.properties.indicator.mode === "global") {
+    if (config.properties.indicator.mode === 'global') {
         return config.properties.indicator.globalColor || default_color;
     } else {
-        return (
-            config.properties.indicator.channelColors[channelIdx] ||
-            default_color
-        );
+        return config.properties.indicator.channelColors[channelIdx] || default_color;
     }
 }
 
@@ -443,7 +458,9 @@ function getChannelOpacity(val) {
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     if (config.properties.pwm.indicatorOffAtMin) {
-        if (val <= min) {return 0;}
+        if (val <= min) {
+            return 0;
+        }
         return Math.min(1, (val - min) / (max - min));
     } else {
         return Math.min(1, val / max);
@@ -453,10 +470,10 @@ function getChannelOpacity(val) {
 function clampStateValues() {
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    const clamp = (v) => Math.round(Math.min(max, Math.max(min, v)));
-    (config.patterns || []).forEach((item) => {
-        if (item.type === "group") {
-            item.patterns.forEach((p) => {
+    const clamp = v => Math.round(Math.min(max, Math.max(min, v)));
+    (config.patterns || []).forEach(item => {
+        if (item.type === 'group') {
+            item.patterns.forEach(p => {
                 p.state = p.state.map(clamp);
             });
         } else {
@@ -470,22 +487,20 @@ function clampStateValues() {
 // Tracks snapshots of the whole `config` object so edits can be undone/redone.
 // ==========================================================================
 function saveHistoryToLocal() {
-    localStorage.setItem(
-        `strobe_history_v${version}`,
-        JSON.stringify(historyStack),
-    );
-    localStorage.setItem(
-        `strobe_history_index_v${version}`,
-        historyIndex.toString(),
-    );
+    localStorage.setItem(`strobe_history_v${version}`, JSON.stringify(historyStack));
+    localStorage.setItem(`strobe_history_index_v${version}`, historyIndex.toString());
 }
 
 function saveState(jsonString) {
-    if (historyIndex < historyStack.length - 1)
-        {historyStack = historyStack.slice(0, historyIndex + 1);}
+    if (historyIndex < historyStack.length - 1) {
+        historyStack = historyStack.slice(0, historyIndex + 1);
+    }
     historyStack.push(jsonString);
-    if (historyStack.length > MAX_HISTORY) {historyStack.shift();}
-    else {historyIndex++;}
+    if (historyStack.length > MAX_HISTORY) {
+        historyStack.shift();
+    } else {
+        historyIndex++;
+    }
     updateUndoRedoButtons();
     saveHistoryToLocal();
 }
@@ -495,7 +510,7 @@ function undoState() {
         isUndoRedoAction = true;
         historyIndex--;
         applyHistoryState();
-        showToast("Undid action", "history");
+        showToast('Undid action', 'history');
     }
     updateUndoRedoButtons();
     saveHistoryToLocal();
@@ -506,7 +521,7 @@ function redoState() {
         isUndoRedoAction = true;
         historyIndex++;
         applyHistoryState();
-        showToast("Redid action", "history");
+        showToast('Redid action', 'history');
     }
     updateUndoRedoButtons();
     saveHistoryToLocal();
@@ -514,21 +529,21 @@ function redoState() {
 
 function applyHistoryState() {
     config = JSON.parse(historyStack[historyIndex]);
-    if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
+    if (!config._strobe_editor_version) {
+        config._strobe_editor_version = '1';
+    }
     ensureConfigDefaults(); // also migrates colors
     syncPinsMappingLength();
     syncCanvasLayoutLength();
-    document.getElementById("light-bar").innerHTML = "";
-    document.getElementById("custom-layout-view").innerHTML = "";
+    document.getElementById('light-bar').innerHTML = '';
+    document.getElementById('custom-layout-view').innerHTML = '';
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(
-            config.properties.pwm.min || DEFAULT_PWM_MIN,
-        ),
+        new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
         0,
-        bgDim,
+        bgDim
     );
-    document.getElementById("global-channels").value = config.channels;
+    document.getElementById('global-channels').value = config.channels;
     renderTable();
     renderInspector();
     isUndoRedoAction = false;
@@ -536,10 +551,14 @@ function applyHistoryState() {
 }
 
 function updateUndoRedoButtons() {
-    const u = document.getElementById("btn-undo"),
-        r = document.getElementById("btn-redo");
-    if (u) {u.disabled = historyIndex <= 0;}
-    if (r) {r.disabled = historyIndex >= historyStack.length - 1;}
+    const u = document.getElementById('btn-undo'),
+        r = document.getElementById('btn-redo');
+    if (u) {
+        u.disabled = historyIndex <= 0;
+    }
+    if (r) {
+        r.disabled = historyIndex >= historyStack.length - 1;
+    }
 }
 
 // ==========================================================================
@@ -548,11 +567,11 @@ function updateUndoRedoButtons() {
 // ==========================================================================
 function handleEmptyClick(e) {
     const isDeadSpace =
-        e.target.classList.contains("app-container") ||
-        e.target.contains(document.getElementById("custom-layout-view")) ||
-        e.target.classList.contains("editor-side") ||
-        e.target.tagName.toLowerCase() === "table" ||
-        e.target.tagName.toLowerCase() === "thead";
+        e.target.classList.contains('app-container') ||
+        e.target.contains(document.getElementById('custom-layout-view')) ||
+        e.target.classList.contains('editor-side') ||
+        e.target.tagName.toLowerCase() === 'table' ||
+        e.target.tagName.toLowerCase() === 'thead';
     if (isDeadSpace) {
         activePath = null;
         selectedPaths.clear();
@@ -579,38 +598,45 @@ function setActivePath(path) {
 // ==========================================================================
 function saveSelectionState() {
     selectionHistoryStack.push(new Set(selectedPaths));
-    if (selectionHistoryStack.length > 50) {selectionHistoryStack.shift();}
+    if (selectionHistoryStack.length > 50) {
+        selectionHistoryStack.shift();
+    }
     updateSelectionUndoButton();
 }
 
 function undoSelection() {
-    if (selectionHistoryStack.length === 0) {return;}
+    if (selectionHistoryStack.length === 0) {
+        return;
+    }
     selectedPaths = selectionHistoryStack.pop();
     renderTableSelection();
     updateSelectionUndoButton();
-    showToast("Selection restored");
+    showToast('Selection restored');
 }
 
 function updateSelectionUndoButton() {
-    const btn = document.getElementById("sel-undo");
-    if (btn) {btn.disabled = selectionHistoryStack.length === 0;}
+    const btn = document.getElementById('sel-undo');
+    if (btn) {
+        btn.disabled = selectionHistoryStack.length === 0;
+    }
 }
 
 function filterSelectionOddEven(type) {
-    if (selectedPaths.size === 0) {return;}
+    if (selectedPaths.size === 0) {
+        return;
+    }
     saveSelectionState();
-    const allVisualPaths = Array.from(
-        document.querySelectorAll("#pattern-list tr"),
-    )
-        .map((tr) => tr.dataset.path)
+    const allVisualPaths = Array.from(document.querySelectorAll('#pattern-list tr'))
+        .map(tr => tr.dataset.path)
         .filter(Boolean);
-    const sortedSelected = allVisualPaths.filter((path) =>
-        selectedPaths.has(path),
-    );
+    const sortedSelected = allVisualPaths.filter(path => selectedPaths.has(path));
     selectedPaths.clear();
     sortedSelected.forEach((path, idx) => {
-        if (type === "odd" && idx % 2 === 0) {selectedPaths.add(path);}
-        else if (type === "even" && idx % 2 !== 0) {selectedPaths.add(path);}
+        if (type === 'odd' && idx % 2 === 0) {
+            selectedPaths.add(path);
+        } else if (type === 'even' && idx % 2 !== 0) {
+            selectedPaths.add(path);
+        }
     });
     renderTableSelection();
 }
@@ -622,55 +648,53 @@ function filterSelectionOddEven(type) {
 function openCustomColorPopup(e, context) {
     e.stopPropagation();
     currentPickerContext = context;
-    const popup = document.getElementById("custom-color-popup");
-    const hiddenPicker = document.getElementById("hidden-native-picker");
+    const popup = document.getElementById('custom-color-popup');
+    const hiddenPicker = document.getElementById('hidden-native-picker');
 
     let currentColor;
-    if (config.properties.indicator.mode === "global") {
+    if (config.properties.indicator.mode === 'global') {
         currentColor = config.properties.indicator.globalColor || default_color;
-    } else if (typeof context === "number") {
-        currentColor =
-            config.properties.indicator.channelColors[context] || default_color;
+    } else if (typeof context === 'number') {
+        currentColor = config.properties.indicator.channelColors[context] || default_color;
     }
     hiddenPicker.value = currentColor;
 
     const rect = e.target.getBoundingClientRect();
     popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
     popup.style.left = `${Math.min(window.innerWidth - 170, rect.left + window.scrollX)}px`;
-    popup.style.display = "flex";
+    popup.style.display = 'flex';
 
     // Flag management
-    hiddenPicker.addEventListener("click", () => {
+    hiddenPicker.addEventListener('click', () => {
         isNativePickerOpen = true;
     });
-    hiddenPicker.addEventListener("input", (e) => {
+    hiddenPicker.addEventListener('input', e => {
         isNativePickerOpen = false;
         // console.log()
         selectCustomPopupColor(hiddenPicker.value);
         // The change event will trigger selectCustomPopupColor via oninput,
         // but we handle it there as well
     });
-    hiddenPicker.addEventListener("change", () => {
-        document.getElementById("custom-color-popup").style.display = "none";
+    hiddenPicker.addEventListener('change', () => {
+        document.getElementById('custom-color-popup').style.display = 'none';
     });
-    hiddenPicker.addEventListener("blur", () => {
+    hiddenPicker.addEventListener('blur', () => {
         isNativePickerOpen = false;
     });
 }
 
 function selectCustomPopupColor(val) {
-    if (!val) {return;}
-    if (config.properties.indicator.mode === "global") {
+    if (!val) {
+        return;
+    }
+    if (config.properties.indicator.mode === 'global') {
         config.properties.indicator.globalColor = val;
-    } else if (typeof currentPickerContext === "number") {
+    } else if (typeof currentPickerContext === 'number') {
         config.properties.indicator.channelColors[currentPickerContext] = val;
     }
     refreshAll();
     updateJsonPanel();
-    if (
-        document.getElementById("project-settings-modal").style.display ===
-        "flex"
-    ) {
+    if (document.getElementById('project-settings-modal').style.display === 'flex') {
         updateColorModeControls(); // updates chip colors
     }
 }
@@ -679,18 +703,18 @@ function selectCustomPopupColor(val) {
 // HELP MODAL
 // ==========================================================================
 function toggleHelp() {
-    const m = document.getElementById("help-modal");
-    if (m.style.display === "flex") {
-        m.style.display = "none";
+    const m = document.getElementById('help-modal');
+    if (m.style.display === 'flex') {
+        m.style.display = 'none';
     } else {
         closeAllModals();
-        m.style.display = "flex";
+        m.style.display = 'flex';
     }
 }
 
-document.addEventListener("click", () => {
+document.addEventListener('click', () => {
     if (!isNativePickerOpen) {
-        document.getElementById("custom-color-popup").style.display = "none";
+        document.getElementById('custom-color-popup').style.display = 'none';
     }
 });
 
@@ -699,15 +723,21 @@ document.addEventListener("click", () => {
 // Arrow-key row moves, plus the global keydown handler for all hotkeys.
 // ==========================================================================
 function moveActiveRow(dir) {
-    if (!activePath) {return;}
-    const isChild = activePath.includes("-");
+    if (!activePath) {
+        return;
+    }
+    const isChild = activePath.includes('-');
     if (isChild) {
-        const [gIdx, pIdx] = activePath.split("-").map(Number);
+        const [gIdx, pIdx] = activePath.split('-').map(Number);
         const group = config.patterns[gIdx];
-        if (!group || group.type !== "group") {return;}
+        if (!group || group.type !== 'group') {
+            return;
+        }
         const arr = group.patterns;
-        const nextPIdx = dir === "up" ? pIdx - 1 : pIdx + 1;
-        if (nextPIdx < 0 || nextPIdx >= arr.length) {return;}
+        const nextPIdx = dir === 'up' ? pIdx - 1 : pIdx + 1;
+        if (nextPIdx < 0 || nextPIdx >= arr.length) {
+            return;
+        }
 
         const temp = arr[pIdx];
         arr[pIdx] = arr[nextPIdx];
@@ -716,16 +746,21 @@ function moveActiveRow(dir) {
     } else {
         const gIdx = parseInt(activePath);
         const arr = config.patterns;
-        const nextGIdx = dir === "up" ? gIdx - 1 : gIdx + 1;
-        if (nextGIdx < 0 || nextGIdx >= arr.length) {return;}
+        const nextGIdx = dir === 'up' ? gIdx - 1 : gIdx + 1;
+        if (nextGIdx < 0 || nextGIdx >= arr.length) {
+            return;
+        }
 
         const temp = arr[gIdx];
         arr[gIdx] = arr[nextGIdx];
         arr[nextGIdx] = temp;
         activePath = `${nextGIdx}`;
 
-        if (soloGroupIdx === gIdx) {soloGroupIdx = nextGIdx;}
-        else if (soloGroupIdx === nextGIdx) {soloGroupIdx = gIdx;}
+        if (soloGroupIdx === gIdx) {
+            soloGroupIdx = nextGIdx;
+        } else if (soloGroupIdx === nextGIdx) {
+            soloGroupIdx = gIdx;
+        }
     }
     updateJsonPanel();
     renderTable();
@@ -733,179 +768,198 @@ function moveActiveRow(dir) {
     showToast(`Moved active item ${dir}`);
 }
 
-window.addEventListener("keydown", (e) => {
+window.addEventListener('keydown', e => {
     if (
-        e.target.tagName.toLowerCase() === "input" ||
-        e.target.tagName.toLowerCase() === "textarea" ||
-        e.target.tagName.toLowerCase() === "select"
-    )
-        {return;}
+        e.target.tagName.toLowerCase() === 'input' ||
+        e.target.tagName.toLowerCase() === 'textarea' ||
+        e.target.tagName.toLowerCase() === 'select'
+    ) {
+        return;
+    }
     const isCtrl = e.ctrlKey || e.metaKey;
 
-    if (isCtrl && !e.shiftKey && e.key.toLowerCase() === "z") {
+    if (isCtrl && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undoState();
         return;
     }
-    if (isCtrl && e.shiftKey && e.key.toLowerCase() === "z") {
+    if (isCtrl && e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         redoState();
         return;
     }
-    if (isCtrl && e.key.toLowerCase() === "y") {
+    if (isCtrl && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         redoState();
         return;
     }
-    if (isCtrl && e.key.toLowerCase() === "o") {
+    if (isCtrl && e.key.toLowerCase() === 'o') {
         e.preventDefault();
-        document.getElementById("file-input").click();
+        document.getElementById('file-input').click();
         return;
     }
-    if ((e.shiftKey && e.key === "?") || e.key === "/") {
+    if ((e.shiftKey && e.key === '?') || e.key === '/') {
         e.preventDefault();
         toggleHelp();
         return;
     }
-    if (e.code === "Space") {
+    if (e.code === 'Space') {
         e.preventDefault();
         togglePlayback();
         return;
     }
 
-    if (isCtrl && e.key.toLowerCase() === "a") {
+    if (isCtrl && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        if (appMode === "select") {selectAllRows();}
-        return;
-    }
-
-    if (isCtrl && (e.key === "<" || e.key === ",")) {
-        e.preventDefault();
-        if (selectedPaths.size > 0) {
-            shiftSelected("left");
-        } else if (activePath) {
-            shiftPattern(activePath, "left");
-            showToast("Shifted pattern left");
+        if (appMode === 'select') {
+            selectAllRows();
         }
         return;
     }
-    if (isCtrl && (e.key === ">" || e.key === ".")) {
+
+    if (isCtrl && (e.key === '<' || e.key === ',')) {
         e.preventDefault();
         if (selectedPaths.size > 0) {
-            shiftSelected("right");
+            shiftSelected('left');
         } else if (activePath) {
-            shiftPattern(activePath, "right");
-            showToast("Shifted pattern right");
+            shiftPattern(activePath, 'left');
+            showToast('Shifted pattern left');
+        }
+        return;
+    }
+    if (isCtrl && (e.key === '>' || e.key === '.')) {
+        e.preventDefault();
+        if (selectedPaths.size > 0) {
+            shiftSelected('right');
+        } else if (activePath) {
+            shiftPattern(activePath, 'right');
+            showToast('Shifted pattern right');
         }
         return;
     }
 
-    if (appMode === "edit") {
-        if (isCtrl && e.key === "ArrowUp") {
+    if (appMode === 'edit') {
+        if (isCtrl && e.key === 'ArrowUp') {
             e.preventDefault();
-            moveActiveRow("up");
+            moveActiveRow('up');
             return;
         }
-        if (isCtrl && e.key === "ArrowDown") {
+        if (isCtrl && e.key === 'ArrowDown') {
             e.preventDefault();
-            moveActiveRow("down");
+            moveActiveRow('down');
             return;
         }
 
-        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
-            const allRows = Array.from(
-                document.querySelectorAll("#pattern-list tr"),
-            ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
-            const currentIdx = allRows.findIndex(
-                (tr) =>
-                    (tr.dataset.path || tr.dataset.groupPath) === activePath,
+            const allRows = Array.from(document.querySelectorAll('#pattern-list tr')).filter(
+                tr => tr.dataset.path || tr.dataset.groupPath
             );
-            const nextIdx = e.key === "ArrowUp" ? currentIdx - 1 : currentIdx + 1;
+            const currentIdx = allRows.findIndex(
+                tr => (tr.dataset.path || tr.dataset.groupPath) === activePath
+            );
+            const nextIdx = e.key === 'ArrowUp' ? currentIdx - 1 : currentIdx + 1;
             if (nextIdx >= 0 && nextIdx < allRows.length) {
-                setActivePath(
-                    allRows[nextIdx].dataset.path ||
-                        allRows[nextIdx].dataset.groupPath,
-                );
+                setActivePath(allRows[nextIdx].dataset.path || allRows[nextIdx].dataset.groupPath);
             }
             return;
         }
-        if (isCtrl && e.key.toLowerCase() === "d") {
+        if (isCtrl && e.key.toLowerCase() === 'd') {
             e.preventDefault();
-            if (selectedPaths.size > 0) {duplicateSelected();}
-            else if (activePath) {
-                if (activePath.includes("-")) {duplicateRow(activePath);}
-                else {duplicateGroup(parseInt(activePath));}
+            if (selectedPaths.size > 0) {
+                duplicateSelected();
+            } else if (activePath) {
+                if (activePath.includes('-')) {
+                    duplicateRow(activePath);
+                } else {
+                    duplicateGroup(parseInt(activePath));
+                }
             }
             return;
         }
-        if (isCtrl && e.key.toLowerCase() === "m") {
+        if (isCtrl && e.key.toLowerCase() === 'm') {
             e.preventDefault();
-            if (selectedPaths.size > 0) {mirrorSelected();}
-            else if (activePath && activePath.includes("-"))
-                {mirrorPattern(activePath);}
-            return;
-        }
-        if (isCtrl && e.key.toLowerCase() === "i") {
-            e.preventDefault();
-            if (selectedPaths.size > 0) {invertSelected();}
-            else if (activePath) {
-                if (activePath.includes("-")) {invertRow(activePath);}
-                else {invertGroup(parseInt(activePath));}
+            if (selectedPaths.size > 0) {
+                mirrorSelected();
+            } else if (activePath && activePath.includes('-')) {
+                mirrorPattern(activePath);
             }
             return;
         }
-        if (e.key === "Delete") {
-            if (selectedPaths.size > 0) {deleteSelected();}
-            else if (activePath) {removePattern(activePath);}
+        if (isCtrl && e.key.toLowerCase() === 'i') {
+            e.preventDefault();
+            if (selectedPaths.size > 0) {
+                invertSelected();
+            } else if (activePath) {
+                if (activePath.includes('-')) {
+                    invertRow(activePath);
+                } else {
+                    invertGroup(parseInt(activePath));
+                }
+            }
+            return;
+        }
+        if (e.key === 'Delete') {
+            if (selectedPaths.size > 0) {
+                deleteSelected();
+            } else if (activePath) {
+                removePattern(activePath);
+            }
             return;
         }
     }
 
-    if (!isCtrl && e.key.toLowerCase() === "e") {setAppMode("edit");}
-    if (!isCtrl && e.key.toLowerCase() === "s") {setAppMode("select");}
-    if (!isCtrl && e.key.toLowerCase() === "a") {addPattern();}
-    if (isCtrl && e.key.toLowerCase() === "s") {
+    if (!isCtrl && e.key.toLowerCase() === 'e') {
+        setAppMode('edit');
+    }
+    if (!isCtrl && e.key.toLowerCase() === 's') {
+        setAppMode('select');
+    }
+    if (!isCtrl && e.key.toLowerCase() === 'a') {
+        addPattern();
+    }
+    if (isCtrl && e.key.toLowerCase() === 's') {
         e.preventDefault();
         downloadConfig();
     }
-    if (isCtrl && e.key.toLowerCase() === "r") {
+    if (isCtrl && e.key.toLowerCase() === 'r') {
         e.preventDefault();
-        if (appMode === "select") {reverseSelectedOrder();}
+        if (appMode === 'select') {
+            reverseSelectedOrder();
+        }
     }
-    if (isCtrl && e.key.toLowerCase() === "t") {
+    if (isCtrl && e.key.toLowerCase() === 't') {
         e.preventDefault();
         toggleStepIndicator();
     }
-    if (isCtrl && e.key.toLowerCase() === "g") {
+    if (isCtrl && e.key.toLowerCase() === 'g') {
         e.preventDefault();
-        if (appMode === "select") {groupSelectedItems();}
-    }
-    if (isCtrl && e.shiftKey && e.key.toLowerCase() === "g") {
-        e.preventDefault();
-        if (activePath) {
-            const parts = activePath.split("-");
-            const gIdx = parseInt(parts[0]);
-            if (config.patterns[gIdx] && config.patterns[gIdx].type === "group")
-                {ungroup(gIdx);}
+        if (appMode === 'select') {
+            groupSelectedItems();
         }
     }
-    if (e.key === "Escape") {
-        if (document.getElementById("help-modal").style.display === "flex")
-            {toggleHelp();}
-        else if (document.getElementById("json-modal").style.display === "flex")
-            {toggleJsonModal();}
-        else if (
-            document.getElementById("preferences-modal").style.display ===
-            "flex"
-        )
-            {togglePreferencesModal();}
-        else if (
-            document.getElementById("project-settings-modal").style.display ===
-            "flex"
-        )
-            {toggleProjectSettingsModal();}
-        else if (appMode === "select") {clearSelection();}
+    if (isCtrl && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        if (activePath) {
+            const parts = activePath.split('-');
+            const gIdx = parseInt(parts[0]);
+            if (config.patterns[gIdx] && config.patterns[gIdx].type === 'group') {
+                ungroup(gIdx);
+            }
+        }
+    }
+    if (e.key === 'Escape') {
+        if (document.getElementById('help-modal').style.display === 'flex') {
+            toggleHelp();
+        } else if (document.getElementById('json-modal').style.display === 'flex') {
+            toggleJsonModal();
+        } else if (document.getElementById('preferences-modal').style.display === 'flex') {
+            togglePreferencesModal();
+        } else if (document.getElementById('project-settings-modal').style.display === 'flex') {
+            toggleProjectSettingsModal();
+        } else if (appMode === 'select') {
+            clearSelection();
+        }
     }
 });
 
@@ -914,57 +968,50 @@ window.addEventListener("keydown", (e) => {
 // Opening a .json config file from disk.
 // ==========================================================================
 function handleFileInput(event) {
-    if (event.target.files.length > 0) {loadJsonFile(event.target.files[0]);}
-    event.target.value = "";
+    if (event.target.files.length > 0) {
+        loadJsonFile(event.target.files[0]);
+    }
+    event.target.value = '';
 }
 
 function loadJsonFile(file) {
-    if (
-        !file ||
-        (!file.type.includes("json") && !file.name.endsWith(".json"))
-    ) {
-        showToast("Please select a valid JSON file", "warn");
+    if (!file || (!file.type.includes('json') && !file.name.endsWith('.json'))) {
+        showToast('Please select a valid JSON file', 'warn');
         return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = e => {
         try {
-            const p = JSON.parse(
-                file.name.endsWith(".json") ? e.target.result : "{}",
-            );
-            if (
-                p &&
-                typeof p.channels === "number" &&
-                Array.isArray(p.patterns)
-            ) {
+            const p = JSON.parse(file.name.endsWith('.json') ? e.target.result : '{}');
+            if (p && typeof p.channels === 'number' && Array.isArray(p.patterns)) {
                 config = p;
                 ensureConfigDefaults(); // migrates colors
                 syncPinsMappingLength();
                 config = migrateConfigToPWM(config);
-                if (!config._strobe_editor_version)
-                    {config._strobe_editor_version = "1";}
+                if (!config._strobe_editor_version) {
+                    config._strobe_editor_version = '1';
+                }
                 syncCanvasLayoutLength();
-                document.getElementById("light-bar").innerHTML = "";
-                document.getElementById("custom-layout-view").innerHTML = "";
+                document.getElementById('light-bar').innerHTML = '';
+                document.getElementById('custom-layout-view').innerHTML = '';
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(
-                    new Array(config.channels).fill(
-                        config.properties.pwm.min || DEFAULT_PWM_MIN,
-                    ),
+                    new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                     0,
-                    bgDim,
+                    bgDim
                 );
-                document.getElementById("global-channels").value =
-                    config.channels;
+                document.getElementById('global-channels').value = config.channels;
                 activePath = null;
                 inspectorBuffer = null;
                 dirtyFields.clear();
                 renderTable();
                 renderInspector();
-                showToast("Config loaded successfully", "success");
-            } else {showToast("Invalid config format", "warn");}
+                showToast('Config loaded successfully', 'success');
+            } else {
+                showToast('Invalid config format', 'warn');
+            }
         } catch (err) {
-            showToast("Failed to parse JSON", "warn");
+            showToast('Failed to parse JSON', 'warn');
         }
     };
     reader.readAsText(file);
@@ -978,13 +1025,14 @@ function loadJsonFile(file) {
 // ==========================================================================
 function newProject() {
     const hasUnsavedChanges =
-        (config.patterns && config.patterns.length > 0) ||
-        config.channels !== 10;
+        (config.patterns && config.patterns.length > 0) || config.channels !== 10;
     if (hasUnsavedChanges) {
         const confirmed = confirm(
-            "Start a new project? Any unsaved changes to the current project will be lost.",
+            'Start a new project? Any unsaved changes to the current project will be lost.'
         );
-        if (!confirmed) {return;}
+        if (!confirmed) {
+            return;
+        }
     }
 
     config = getDefaultConfig();
@@ -992,54 +1040,47 @@ function newProject() {
     ensureConfigDefaults();
     syncCanvasLayoutLength();
     syncPinsMappingLength();
-    document.getElementById("light-bar").innerHTML = "";
-    document.getElementById("custom-layout-view").innerHTML = "";
+    document.getElementById('light-bar').innerHTML = '';
+    document.getElementById('custom-layout-view').innerHTML = '';
     const bgDim = getBackgroundDimForPath(null);
     renderLights(
-        new Array(config.channels).fill(
-            config.properties.pwm.min || DEFAULT_PWM_MIN,
-        ),
+        new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
         0,
-        bgDim,
+        bgDim
     );
-    document.getElementById("global-channels").value = config.channels;
+    document.getElementById('global-channels').value = config.channels;
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
     renderTable();
     renderInspector();
     updateJsonPanel();
-    showToast("New project created", "success");
+    showToast('New project created', 'success');
 }
 
-document.addEventListener("dragover", (e) => {
-    if (
-        e.dataTransfer.types &&
-        Array.from(e.dataTransfer.types).includes("Files")
-    ) {
+document.addEventListener('dragover', e => {
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
         e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
+        e.dataTransfer.dropEffect = 'copy';
     }
 });
 
-document.addEventListener("drop", (e) => {
-    if (
-        e.dataTransfer.types &&
-        Array.from(e.dataTransfer.types).includes("Files")
-    ) {
+document.addEventListener('drop', e => {
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
         e.preventDefault();
-        if (e.dataTransfer.files.length > 0)
-            {loadJsonFile(e.dataTransfer.files[0]);}
+        if (e.dataTransfer.files.length > 0) {
+            loadJsonFile(e.dataTransfer.files[0]);
+        }
     }
 });
 
 function toggleJsonModal() {
-    const m = document.getElementById("json-modal");
-    if (m.style.display === "flex") {
-        m.style.display = "none";
+    const m = document.getElementById('json-modal');
+    if (m.style.display === 'flex') {
+        m.style.display = 'none';
     } else {
         closeAllModals();
-        m.style.display = "flex";
+        m.style.display = 'flex';
         updateJsonPanel();
         showJsonValid();
     }
@@ -1050,16 +1091,15 @@ function toggleJsonModal() {
 // User-specific settings, persisted to localStorage.
 // ==========================================================================
 function togglePreferencesModal() {
-    const m = document.getElementById("preferences-modal");
-    if (m.style.display === "flex") {
-        m.style.display = "none";
+    const m = document.getElementById('preferences-modal');
+    if (m.style.display === 'flex') {
+        m.style.display = 'none';
     } else {
         closeAllModals();
-        m.style.display = "flex";
+        m.style.display = 'flex';
         // populate preferences values if needed
-        document.getElementById("settings-brush-increment").value =
-            brushIncrement;
-        document.getElementById("settings-show-steps").checked = showSteps;
+        document.getElementById('settings-brush-increment').value = brushIncrement;
+        document.getElementById('settings-show-steps').checked = showSteps;
     }
 }
 
@@ -1068,23 +1108,23 @@ function togglePreferencesModal() {
 // Project-specific settings, persisted into config.properties.
 // ==========================================================================
 function toggleProjectSettingsModal() {
-    const m = document.getElementById("project-settings-modal");
-    if (m.style.display === "flex") {
-        m.style.display = "none";
+    const m = document.getElementById('project-settings-modal');
+    if (m.style.display === 'flex') {
+        m.style.display = 'none';
     } else {
         closeAllModals();
-        m.style.display = "flex";
+        m.style.display = 'flex';
         // populate existing fields
-        document.getElementById("settings-pwm-min").value =
+        document.getElementById('settings-pwm-min').value =
             config.properties.pwm.min || DEFAULT_PWM_MIN;
-        document.getElementById("settings-pwm-max").value =
+        document.getElementById('settings-pwm-max').value =
             config.properties.pwm.max || DEFAULT_PWM_MAX;
-        document.getElementById("settings-indicator-off-min").checked =
+        document.getElementById('settings-indicator-off-min').checked =
             !!config.properties.pwm.indicatorOffAtMin;
-        document.getElementById("settings-background-dim-pwm").value =
+        document.getElementById('settings-background-dim-pwm').value =
             config.properties.backgroundDim.pwm || 0;
-        document.getElementById("settings-ip-address").value =
-            config.properties.ipAddress || "192.168.4.1";
+        document.getElementById('settings-ip-address').value =
+            config.properties.ipAddress || '192.168.4.1';
         updateBackgroundDimPreview();
         updateColorModeControls();
         renderPinsMappingUI(); // new
@@ -1092,21 +1132,27 @@ function toggleProjectSettingsModal() {
 }
 function updateBrushIncrementSetting(val) {
     const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed <= 0) {return;}
+    if (isNaN(parsed) || parsed <= 0) {
+        return;
+    }
     brushIncrement = Math.round(Math.min(1023, Math.max(1, parsed)));
     // Save to localStorage
-    localStorage.setItem("strobe_brush_increment", brushIncrement);
+    localStorage.setItem('strobe_brush_increment', brushIncrement);
 }
 
 function updatePwmRange() {
-    const minInput = document.getElementById("settings-pwm-min");
-    const maxInput = document.getElementById("settings-pwm-max");
+    const minInput = document.getElementById('settings-pwm-min');
+    const maxInput = document.getElementById('settings-pwm-max');
     let newMin = parseInt(minInput.value);
     let newMax = parseInt(maxInput.value);
-    if (isNaN(newMin) || newMin < 0) {newMin = 0;}
-    if (isNaN(newMax) || newMax > 1023) {newMax = 1023;}
+    if (isNaN(newMin) || newMin < 0) {
+        newMin = 0;
+    }
+    if (isNaN(newMax) || newMax > 1023) {
+        newMax = 1023;
+    }
     if (newMin >= newMax) {
-        showToast("Minimum must be less than maximum", "warn");
+        showToast('Minimum must be less than maximum', 'warn');
         return;
     }
     config.properties.pwm.min = newMin;
@@ -1114,10 +1160,12 @@ function updatePwmRange() {
     // Clamp existing state values
     clampStateValues();
     // Clamp brush brightness
-    if (brushBrightness < config.properties.pwm.min)
-        {brushBrightness = config.properties.pwm.min;}
-    if (brushBrightness > config.properties.pwm.max)
-        {brushBrightness = config.properties.pwm.max;}
+    if (brushBrightness < config.properties.pwm.min) {
+        brushBrightness = config.properties.pwm.min;
+    }
+    if (brushBrightness > config.properties.pwm.max) {
+        brushBrightness = config.properties.pwm.max;
+    }
     syncBrushWidgetStyles();
     // Update inspector sliders
     renderInspector();
@@ -1132,21 +1180,19 @@ function updatePwmRange() {
             }
         } else {
             renderLights(
-                new Array(config.channels).fill(
-                    config.properties.pwm.min || DEFAULT_PWM_MIN,
-                ),
+                new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                false,
+                false
             );
         }
     }
     updateJsonPanel();
     updateBackgroundDimPreview();
-    showToast("PWM range updated", "success");
+    showToast('PWM range updated', 'success');
 }
 
 function toggleIndicatorOffAtMin() {
-    const checkbox = document.getElementById("settings-indicator-off-min");
+    const checkbox = document.getElementById('settings-indicator-off-min');
     config.properties.pwm.indicatorOffAtMin = checkbox.checked;
     // Re-render preview
     if (!isPlaying) {
@@ -1158,25 +1204,26 @@ function toggleIndicatorOffAtMin() {
             }
         } else {
             renderLights(
-                new Array(config.channels).fill(
-                    config.properties.pwm.min || DEFAULT_PWM_MIN,
-                ),
+                new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                false,
+                false
             );
         }
     }
     renderTable();
     updateJsonPanel();
     updateBackgroundDimPreview();
-    showToast("Indicator behaviour updated", "success");
+    showToast('Indicator behaviour updated', 'success');
 }
 
 function updateBackgroundDimPWM(val) {
     let parsed = parseInt(val);
-    if (isNaN(parsed) || parsed < 0) {parsed = 0;}
-    if (parsed > (config.properties.pwm.max || DEFAULT_PWM_MAX))
-        {parsed = config.properties.pwm.max || DEFAULT_PWM_MAX;}
+    if (isNaN(parsed) || parsed < 0) {
+        parsed = 0;
+    }
+    if (parsed > (config.properties.pwm.max || DEFAULT_PWM_MAX)) {
+        parsed = config.properties.pwm.max || DEFAULT_PWM_MAX;
+    }
     config.properties.backgroundDim.pwm = parsed;
     updateJsonPanel();
     // Update preview if active pattern
@@ -1189,37 +1236,37 @@ function updateBackgroundDimPWM(val) {
             }
         } else {
             renderLights(
-                new Array(config.channels).fill(
-                    config.properties.pwm.min || DEFAULT_PWM_MIN,
-                ),
+                new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                false,
+                false
             );
         }
     }
     // Also update the settings preview
     updateBackgroundDimPreview();
-    showToast("Background Dim PWM updated", "success");
+    showToast('Background Dim PWM updated', 'success');
 }
 
 function updateBackgroundDimPreview() {
-    const previewContainer = document.getElementById("bg-dim-preview");
-    if (!previewContainer) {return;}
+    const previewContainer = document.getElementById('bg-dim-preview');
+    if (!previewContainer) {
+        return;
+    }
     const bgPWM = config.properties.backgroundDim.pwm || 0;
     const maxPWM = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const minPWM = config.properties.pwm.min || DEFAULT_PWM_MIN;
     // Three states: OFF (0), Background Dim (bgPWM), ON (maxPWM)
     const states = [0, bgPWM, maxPWM];
-    const labels = ["OFF", "BG Dim", "ON"];
-    previewContainer.innerHTML = "";
+    const labels = ['OFF', 'BG Dim', 'ON'];
+    previewContainer.innerHTML = '';
     states.forEach((val, idx) => {
-        const wrapper = document.createElement("div");
-        wrapper.style.display = "flex";
-        wrapper.style.flexDirection = "column";
-        wrapper.style.alignItems = "center";
-        wrapper.style.gap = "2px";
-        const dot = document.createElement("div");
-        dot.className = "bg-preview-dot";
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.gap = '2px';
+        const dot = document.createElement('div');
+        dot.className = 'bg-preview-dot';
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
         const color = getEffectiveColor(0);
@@ -1229,14 +1276,14 @@ function updateBackgroundDimPreview() {
             dot.style.boxShadow = `0 0 6px ${color}`;
             dot.style.borderColor = color;
         } else {
-            dot.style.background = "#222";
-            dot.style.opacity = "1";
-            dot.style.boxShadow = "none";
-            dot.style.borderColor = "var(--border)";
+            dot.style.background = '#222';
+            dot.style.opacity = '1';
+            dot.style.boxShadow = 'none';
+            dot.style.borderColor = 'var(--border)';
         }
-        const label = document.createElement("span");
-        label.style.fontSize = "8px";
-        label.style.color = "#888";
+        const label = document.createElement('span');
+        label.style.fontSize = '8px';
+        label.style.color = '#888';
         label.textContent = labels[idx];
         wrapper.appendChild(dot);
         wrapper.appendChild(label);
@@ -1248,23 +1295,20 @@ function updateBackgroundDimPreview() {
 // INDICATOR COLOR MODE CONTROLS (Settings)
 // ==========================================================================
 function setColorMode(mode) {
-    if (mode === config.properties.indicator.mode) {return;}
-    if (mode === "global") {
+    if (mode === config.properties.indicator.mode) {
+        return;
+    }
+    if (mode === 'global') {
         // Switch to global: use the first channel's color (or most common if all same)
         const colors = config.properties.indicator.channelColors;
-        const allSame = colors.every((c) => c === colors[0]);
-        config.properties.indicator.globalColor = allSame
-            ? colors[0]
-            : colors[0]; // could use most common, but we'll use first
-        config.properties.indicator.mode = "global";
+        const allSame = colors.every(c => c === colors[0]);
+        config.properties.indicator.globalColor = allSame ? colors[0] : colors[0]; // could use most common, but we'll use first
+        config.properties.indicator.mode = 'global';
     } else {
         // Switch to per-channel: populate all channels with current global color
-        const globalColor =
-            config.properties.indicator.globalColor || default_color;
-        config.properties.indicator.channelColors = new Array(
-            config.channels,
-        ).fill(globalColor);
-        config.properties.indicator.mode = "per-channel";
+        const globalColor = config.properties.indicator.globalColor || default_color;
+        config.properties.indicator.channelColors = new Array(config.channels).fill(globalColor);
+        config.properties.indicator.mode = 'per-channel';
     }
     updateColorModeControls();
     refreshAll();
@@ -1272,28 +1316,28 @@ function setColorMode(mode) {
 }
 
 function updateColorModeControls() {
-    const container = document.getElementById("color-mode-controls");
-    if (!container) {return;}
+    const container = document.getElementById('color-mode-controls');
+    if (!container) {
+        return;
+    }
     const mode = config.properties.indicator.mode;
-    let html = "";
+    let html = '';
 
-    if (mode === "global") {
-        const currentColor =
-            config.properties.indicator.globalColor || default_color;
+    if (mode === 'global') {
+        const currentColor = config.properties.indicator.globalColor || default_color;
         html = `
             <div style="margin-top: 5px;">
                 <div class="swatch-picker-container" data-slot="global">
-                    ${createColorSwatchPickerHTML(currentColor, "global")}
+                    ${createColorSwatchPickerHTML(currentColor, 'global')}
                 </div>
                 <div style="font-size: 10px; color: #666; margin-top: 4px;">All indicators share this color.</div>
             </div>
         `;
     } else {
         // Per-channel: chips
-        let chipsHtml = "";
+        let chipsHtml = '';
         for (let i = 0; i < config.channels; i++) {
-            const color =
-                config.properties.indicator.channelColors[i] || default_color;
+            const color = config.properties.indicator.channelColors[i] || default_color;
             chipsHtml += `
                 <div class="channel-chip" data-channel="${i}" style="
                     display: inline-block;
@@ -1321,57 +1365,52 @@ function updateColorModeControls() {
 
     // Update radio buttons
     const radios = document.querySelectorAll('input[name="colorMode"]');
-    radios.forEach((radio) => {
+    radios.forEach(radio => {
         radio.checked = radio.value === mode;
     });
 
     // Attach chip click handlers (per-channel mode)
-    if (mode === "per-channel") {
-        container.querySelectorAll(".channel-chip").forEach((chip) => {
-            chip.addEventListener("click", (e) => {
+    if (mode === 'per-channel') {
+        container.querySelectorAll('.channel-chip').forEach(chip => {
+            chip.addEventListener('click', e => {
                 const channel = parseInt(chip.dataset.channel);
                 openCustomColorPopup(e, channel);
             });
-            chip.addEventListener("mouseenter", () => {
-                chip.style.borderColor = "#fff";
+            chip.addEventListener('mouseenter', () => {
+                chip.style.borderColor = '#fff';
             });
-            chip.addEventListener("mouseleave", () => {
-                chip.style.borderColor = "#555";
+            chip.addEventListener('mouseleave', () => {
+                chip.style.borderColor = '#555';
             });
         });
     }
 
     // For global mode, attach swatch picker listeners
-    if (mode === "global") {
-        const pickerContainer = container.querySelector(
-            ".swatch-picker-container",
-        );
+    if (mode === 'global') {
+        const pickerContainer = container.querySelector('.swatch-picker-container');
         if (pickerContainer) {
-            const swatches = pickerContainer.querySelectorAll(".swatch");
-            const customBtn =
-                pickerContainer.querySelector(".custom-color-btn");
-            const hiddenPicker = pickerContainer.querySelector(
-                ".hidden-color-input",
-            );
+            const swatches = pickerContainer.querySelectorAll('.swatch');
+            const customBtn = pickerContainer.querySelector('.custom-color-btn');
+            const hiddenPicker = pickerContainer.querySelector('.hidden-color-input');
 
-            swatches.forEach((swatch) => {
-                swatch.addEventListener("click", () => {
+            swatches.forEach(swatch => {
+                swatch.addEventListener('click', () => {
                     const color = swatch.dataset.color;
                     handleSwatchColorChange(color);
                 });
             });
 
-            customBtn.addEventListener("click", () => {
+            customBtn.addEventListener('click', () => {
                 isNativePickerOpen = true;
                 hiddenPicker.click();
             });
 
-            hiddenPicker.addEventListener("input", (e) => {
+            hiddenPicker.addEventListener('input', e => {
                 const color = e.target.value;
                 handleSwatchColorChange(color);
             });
 
-            hiddenPicker.addEventListener("change", (e) => {
+            hiddenPicker.addEventListener('change', e => {
                 updateColorModeControls();
             });
         }
@@ -1379,32 +1418,25 @@ function updateColorModeControls() {
 }
 
 function createColorSwatchPickerHTML(currentColor, slotId) {
-    const presets = [
-        "#ff2a2a",
-        "#e7000b",
-        "#2b7fff",
-        "#1447e6",
-        "#e17100",
-        "#ffffff",
-    ];
+    const presets = ['#ff2a2a', '#e7000b', '#2b7fff', '#1447e6', '#e17100', '#ffffff'];
     const swatchesHtml = presets
         .map(
-            (c) => `
+            c => `
         <div class="swatch" data-color="${c}" style="
             display: inline-block;
             width: 24px;
             height: 24px;
             border-radius: 3px;
             background: ${c};
-            border: 2px solid ${c === currentColor ? "#fff" : "transparent"};
+            border: 2px solid ${c === currentColor ? '#fff' : 'transparent'};
             cursor: pointer;
             margin-right: 4px;
             box-sizing: border-box;
             transition: border-color 0.15s, transform 0.1s;
         "></div>
-    `,
+    `
         )
-        .join("");
+        .join('');
 
     return `
         <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -1447,20 +1479,20 @@ function refreshAll() {
             }
         } else {
             renderLights(
-                new Array(config.channels).fill(
-                    config.properties.pwm.min || DEFAULT_PWM_MIN,
-                ),
+                new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                false,
+                false
             );
         }
     }
     updateJsonPanel();
 }
 
-document.addEventListener("click", () => {
-    const pop = document.getElementById("brush-presets-popup");
-    if (pop) {pop.style.display = "none";}
+document.addEventListener('click', () => {
+    const pop = document.getElementById('brush-presets-popup');
+    if (pop) {
+        pop.style.display = 'none';
+    }
 });
 
 // ==========================================================================
@@ -1470,27 +1502,27 @@ document.addEventListener("click", () => {
 function downloadConfig() {
     const blob = new Blob([JSON.stringify(getOrderedConfig(), null, 2)], {
         // <-- changed
-        type: "application/json",
+        type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
-    a.download = "strobe_config.json";
+    a.download = 'strobe_config.json';
     a.click();
     URL.revokeObjectURL(url);
-    showToast("Config downloaded");
+    showToast('Config downloaded');
 }
 
 function copyToClipboard() {
     navigator.clipboard
-        .writeText(document.getElementById("json-input").value)
+        .writeText(document.getElementById('json-input').value)
         .then(() => {
-            showToast("JSON copied to clipboard", "success");
+            showToast('JSON copied to clipboard', 'success');
         })
-        .catch((err) => {
-            document.getElementById("json-input").select();
-            document.execCommand("copy");
-            showToast("JSON copied to clipboard", "success");
+        .catch(err => {
+            document.getElementById('json-input').select();
+            document.execCommand('copy');
+            showToast('JSON copied to clipboard', 'success');
         });
 }
 
@@ -1502,39 +1534,42 @@ function setAppMode(mode) {
     appMode = mode;
     inspectorBuffer = null;
     dirtyFields.clear();
-    document.getElementById("btn-edit-mode").className =
-        mode === "edit" ? "active-mode" : "";
-    document.getElementById("btn-select-mode").className =
-        mode === "select" ? "active-mode" : "";
-    document.getElementById("editor-container").className =
-        mode === "select"
-            ? "editor-side select-mode-active"
-            : "editor-side show-steps";
-    document.getElementById("selection-toolbar").style.display =
-        mode === "select" ? "flex" : "none";
-    if (mode === "edit") {
+    document.getElementById('btn-edit-mode').className = mode === 'edit' ? 'active-mode' : '';
+    document.getElementById('btn-select-mode').className = mode === 'select' ? 'active-mode' : '';
+    document.getElementById('editor-container').className =
+        mode === 'select' ? 'editor-side select-mode-active' : 'editor-side show-steps';
+    document.getElementById('selection-toolbar').style.display =
+        mode === 'select' ? 'flex' : 'none';
+    if (mode === 'edit') {
         selectedPaths.clear();
         selectionHistoryStack = [];
     }
     renderTable();
     renderInspector();
-    if (mode === "select") {updateSelectionUndoButton();}
+    if (mode === 'select') {
+        updateSelectionUndoButton();
+    }
 }
 
 function toggleStepIndicator() {
     console.log(showSteps);
     showSteps = !showSteps;
-    localStorage.setItem("strobe_show_steps", showSteps);
+    localStorage.setItem('strobe_show_steps', showSteps);
     syncStepUI();
 }
 
 function syncStepUI() {
-    const container = document.getElementById("editor-container");
-    if (showSteps) {container.classList.add("show-steps");}
-    else {container.classList.remove("show-steps");}
+    const container = document.getElementById('editor-container');
+    if (showSteps) {
+        container.classList.add('show-steps');
+    } else {
+        container.classList.remove('show-steps');
+    }
 
-    const checkbox = document.getElementById("settings-show-steps");
-    if (checkbox) {checkbox.checked = showSteps;}
+    const checkbox = document.getElementById('settings-show-steps');
+    if (checkbox) {
+        checkbox.checked = showSteps;
+    }
 }
 
 window.onmouseup = () => {
@@ -1548,24 +1583,22 @@ window.onmouseup = () => {
 // (pattern 1 inside group 2). These helpers resolve a path to real data.
 // ==========================================================================
 function getObjByPath(path) {
-    const [gIdx, pIdx] = path.split("-");
-    return pIdx === undefined
-        ? config.patterns[gIdx]
-        : config.patterns[gIdx].patterns[pIdx];
+    const [gIdx, pIdx] = path.split('-');
+    return pIdx === undefined ? config.patterns[gIdx] : config.patterns[gIdx].patterns[pIdx];
 }
 function getArrByPath(path) {
-    const [gIdx, pIdx] = path.split("-");
-    return pIdx === undefined
-        ? config.patterns
-        : config.patterns[gIdx].patterns;
+    const [gIdx, pIdx] = path.split('-');
+    return pIdx === undefined ? config.patterns : config.patterns[gIdx].patterns;
 }
 function getIdxByPath(path) {
-    const parts = path.split("-");
+    const parts = path.split('-');
     return parseInt(parts[parts.length - 1]);
 }
 
 function getBackgroundDimForPath(path) {
-    if (!path) {return false;}
+    if (!path) {
+        return false;
+    }
     const p = getObjByPath(path);
     return p && p.backgroundDim ? true : false;
 }
@@ -1575,16 +1608,18 @@ function getBackgroundDimForPath(path) {
 // Select all / clear / group / ungroup multiple rows at once.
 // ==========================================================================
 function selectAllRows() {
-    if (appMode !== "select") {return;}
+    if (appMode !== 'select') {
+        return;
+    }
     saveSelectionState();
     inspectorBuffer = null;
     dirtyFields.clear();
     config.patterns.forEach((item, gIdx) => {
-        if (item.type === "group")
-            {item.patterns.forEach((_, pIdx) =>
-                selectedPaths.add(`${gIdx}-${pIdx}`),
-            );}
-        else {selectedPaths.add(`${gIdx}`);}
+        if (item.type === 'group') {
+            item.patterns.forEach((_, pIdx) => selectedPaths.add(`${gIdx}-${pIdx}`));
+        } else {
+            selectedPaths.add(`${gIdx}`);
+        }
     });
     renderTableSelection();
 }
@@ -1599,15 +1634,20 @@ function clearSelection() {
 
 function groupSelectedItems() {
     const rootIndices = Array.from(selectedPaths)
-        .filter((p) => !p.includes("-"))
+        .filter(p => !p.includes('-'))
         .map(Number)
         .sort((a, b) => a - b);
-    if (rootIndices.length < 1) {return;}
-    const group = { type: "group", repeat: 2, patterns: [], bounce: false };
+    if (rootIndices.length < 1) {
+        return;
+    }
+    const group = { type: 'group', repeat: 2, patterns: [], bounce: false };
     for (let i = rootIndices.length - 1; i >= 0; i--) {
         const item = config.patterns.splice(rootIndices[i], 1)[0];
-        if (item.type === "group") {group.patterns.unshift(...item.patterns);}
-        else {group.patterns.unshift(item);}
+        if (item.type === 'group') {
+            group.patterns.unshift(...item.patterns);
+        } else {
+            group.patterns.unshift(item);
+        }
     }
     config.patterns.splice(rootIndices[0], 0, group);
     selectedPaths.clear();
@@ -1616,18 +1656,20 @@ function groupSelectedItems() {
     dirtyFields.clear();
     renderTable();
     renderInspector();
-    showToast("Group created");
+    showToast('Group created');
 }
 function ungroup(gIdx) {
     const group = config.patterns[gIdx];
     config.patterns.splice(gIdx, 1, ...group.patterns);
-    if (soloGroupIdx === gIdx) {soloGroupIdx = null;}
+    if (soloGroupIdx === gIdx) {
+        soloGroupIdx = null;
+    }
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
     renderTable();
     renderInspector();
-    showToast("Group disbanded");
+    showToast('Group disbanded');
 }
 
 // ==========================================================================
@@ -1640,35 +1682,45 @@ function updateGlobalChannels(val) {
     syncPinsMappingLength();
 
     // adjust indicatorColors
-    if (!config.properties.indicator.channelColors)
-        {config.properties.indicator.channelColors = [];}
-    while (config.properties.indicator.channelColors.length < n)
-        {config.properties.indicator.channelColors.push(default_color);}
-    if (config.properties.indicator.channelColors.length > n)
-        {config.properties.indicator.channelColors =
-            config.properties.indicator.channelColors.slice(0, n);}
+    if (!config.properties.indicator.channelColors) {
+        config.properties.indicator.channelColors = [];
+    }
+    while (config.properties.indicator.channelColors.length < n) {
+        config.properties.indicator.channelColors.push(default_color);
+    }
+    if (config.properties.indicator.channelColors.length > n) {
+        config.properties.indicator.channelColors = config.properties.indicator.channelColors.slice(
+            0,
+            n
+        );
+    }
     // if global mode, ensure indicatorColor exists
-    if (!config.properties.indicator.globalColor)
-        {config.properties.indicator.globalColor = default_color;}
+    if (!config.properties.indicator.globalColor) {
+        config.properties.indicator.globalColor = default_color;
+    }
 
     syncCanvasLayoutLength();
-    const fixLength = (p) => {
-        while (p.state.length < n) {p.state.push(0);}
-        if (p.state.length > n) {p.state = p.state.slice(0, n);}
+    const fixLength = p => {
+        while (p.state.length < n) {
+            p.state.push(0);
+        }
+        if (p.state.length > n) {
+            p.state = p.state.slice(0, n);
+        }
     };
-    config.patterns.forEach((item) => {
-        if (item.type === "group") {item.patterns.forEach(fixLength);}
-        else {fixLength(item);}
+    config.patterns.forEach(item => {
+        if (item.type === 'group') {
+            item.patterns.forEach(fixLength);
+        } else {
+            fixLength(item);
+        }
     });
-    document.getElementById("light-bar").innerHTML = "";
-    document.getElementById("custom-layout-view").innerHTML = "";
+    document.getElementById('light-bar').innerHTML = '';
+    document.getElementById('custom-layout-view').innerHTML = '';
     renderTable();
 
     // also update settings if open
-    if (
-        document.getElementById("project-settings-modal").style.display ===
-        "flex"
-    ) {
+    if (document.getElementById('project-settings-modal').style.display === 'flex') {
         updateColorModeControls();
     }
 }
@@ -1683,33 +1735,38 @@ function updateGlobalChannels(val) {
 function setActiveTool(tool) {
     activeTool = tool;
 
-    const hybridBtn = document.getElementById("tool-hybrid-btn");
-    const paintBtn = document.getElementById("tool-paint-btn");
-    const eraseBtn = document.getElementById("tool-erase-btn");
+    const hybridBtn = document.getElementById('tool-hybrid-btn');
+    const paintBtn = document.getElementById('tool-paint-btn');
+    const eraseBtn = document.getElementById('tool-erase-btn');
 
-    hybridBtn.className = "btn-compact";
-    paintBtn.className = "btn-compact";
-    eraseBtn.className = "btn-compact";
+    hybridBtn.className = 'btn-compact';
+    paintBtn.className = 'btn-compact';
+    eraseBtn.className = 'btn-compact';
 
-    if (tool === "hybrid") {hybridBtn.classList.add("active-hybrid");}
-    if (tool === "paint") {paintBtn.classList.add("active-paint");}
-    if (tool === "erase") {eraseBtn.classList.add("active-erase");}
+    if (tool === 'hybrid') {
+        hybridBtn.classList.add('active-hybrid');
+    }
+    if (tool === 'paint') {
+        paintBtn.classList.add('active-paint');
+    }
+    if (tool === 'erase') {
+        eraseBtn.classList.add('active-erase');
+    }
 
-    const opacityVal = tool === "erase" ? "0.3" : "1";
-    document.getElementById("paint-tool-scroll-box").style.opacity = opacityVal;
-    document.getElementById("brush-presets-dropdown-wrapper").style.opacity =
-        opacityVal;
+    const opacityVal = tool === 'erase' ? '0.3' : '1';
+    document.getElementById('paint-tool-scroll-box').style.opacity = opacityVal;
+    document.getElementById('brush-presets-dropdown-wrapper').style.opacity = opacityVal;
     syncBrushWidgetStyles();
 }
 
 function syncBrushWidgetStyles() {
-    const inputField = document.getElementById("global-brush-val");
+    const inputField = document.getElementById('global-brush-val');
     if (inputField && document.activeElement !== inputField) {
         inputField.value = brushBrightness;
         inputField.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
         inputField.max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     }
-    const scrollBox = document.getElementById("paint-tool-scroll-box");
+    const scrollBox = document.getElementById('paint-tool-scroll-box');
     if (scrollBox) {
         const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
         const intensity = Math.min(1, brushBrightness / max);
@@ -1718,7 +1775,9 @@ function syncBrushWidgetStyles() {
 }
 
 function handleBrushWidgetWheel(event) {
-    if (activeTool === "erase") {return;}
+    if (activeTool === 'erase') {
+        return;
+    }
     event.preventDefault();
     const step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
@@ -1730,9 +1789,13 @@ function handleBrushWidgetWheel(event) {
 }
 
 function handleManualBrushInput(val) {
-    if (activeTool === "erase") {return;}
+    if (activeTool === 'erase') {
+        return;
+    }
     const parsed = parseFloat(val);
-    if (isNaN(parsed)) {return;}
+    if (isNaN(parsed)) {
+        return;
+    }
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     brushBrightness = Math.round(Math.min(max, Math.max(min, parsed)));
@@ -1741,46 +1804,52 @@ function handleManualBrushInput(val) {
 }
 
 function toggleBrushPresetsMenu(e) {
-    if (activeTool === "erase") {return;}
+    if (activeTool === 'erase') {
+        return;
+    }
     e.stopPropagation();
-    const pop = document.getElementById("brush-presets-popup");
+    const pop = document.getElementById('brush-presets-popup');
     // Populate presets based on current min/max
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const range = max - min;
     const presets = [
-        { label: "10%", value: min + range * 0.1 },
-        { label: "25%", value: min + range * 0.25 },
-        { label: "50%", value: min + range * 0.5 },
-        { label: "75%", value: min + range * 0.75 },
-        { label: "100%", value: max },
+        { label: '10%', value: min + range * 0.1 },
+        { label: '25%', value: min + range * 0.25 },
+        { label: '50%', value: min + range * 0.5 },
+        { label: '75%', value: min + range * 0.75 },
+        { label: '100%', value: max },
     ];
     pop.innerHTML = presets
         .map(
-            (p) =>
-                `<button onclick="selectBrushPreset(${Math.round(p.value)})">${p.label} (${Math.round(p.value)})</button>`,
+            p =>
+                `<button onclick="selectBrushPreset(${Math.round(p.value)})">${p.label} (${Math.round(p.value)})</button>`
         )
-        .join("");
-    pop.style.display = pop.style.display === "block" ? "none" : "block";
+        .join('');
+    pop.style.display = pop.style.display === 'block' ? 'none' : 'block';
 }
 
 function selectBrushPreset(val) {
     brushBrightness = val;
     syncBrushWidgetStyles();
-    document.getElementById("brush-presets-popup").style.display = "none";
+    document.getElementById('brush-presets-popup').style.display = 'none';
     renderInspector();
 }
 
 // Grid Painting Drag Action Modules
 function startPaintStrokeDrag(path, si) {
-    if (appMode !== "edit") {return;}
+    if (appMode !== 'edit') {
+        return;
+    }
     isPaintingActive = true;
     nodesToggledInCurrentStroke.clear();
     paintTargetCellNode(path, si);
 }
 
 function enterPaintStrokeDrag(path, si) {
-    if (!isPaintingActive || appMode !== "edit") {return;}
+    if (!isPaintingActive || appMode !== 'edit') {
+        return;
+    }
     paintTargetCellNode(path, si);
 }
 
@@ -1793,22 +1862,24 @@ function globallyReleasePaintStroke() {
 
 function paintTargetCellNode(path, si) {
     const nodeKey = `${path}-${si}`;
-    if (nodesToggledInCurrentStroke.has(nodeKey)) {return;}
+    if (nodesToggledInCurrentStroke.has(nodeKey)) {
+        return;
+    }
 
     nodesToggledInCurrentStroke.add(nodeKey);
     const p = getObjByPath(path);
-    if (!p) {return;}
+    if (!p) {
+        return;
+    }
 
-    if (activeTool === "paint") {
+    if (activeTool === 'paint') {
         p.state[si] = brushBrightness;
-    } else if (activeTool === "erase") {
+    } else if (activeTool === 'erase') {
         p.state[si] = config.properties.pwm.min || DEFAULT_PWM_MIN;
-    } else if (activeTool === "hybrid") {
+    } else if (activeTool === 'hybrid') {
         const current = Math.round(parseFloat(p.state[si]) || 0);
         const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
-        const isOn = config.properties.pwm.indicatorOffAtMin
-            ? current > min
-            : current > 0;
+        const isOn = config.properties.pwm.indicatorOffAtMin ? current > min : current > 0;
         if (isOn) {
             if (current === brushBrightness) {
                 p.state[si] = min; // turn off to minimum
@@ -1827,31 +1898,34 @@ function paintTargetCellNode(path, si) {
     }
     updateJsonPanel();
     if (activePath === path) {
-        const rangeInput = document.getElementById("inspector-dimmer-range");
-        const numberInput = document.getElementById("inspector-dimmer-number");
-        const labelNode = document.getElementById("inspector-dimmer-label");
+        const rangeInput = document.getElementById('inspector-dimmer-range');
+        const numberInput = document.getElementById('inspector-dimmer-number');
+        const labelNode = document.getElementById('inspector-dimmer-label');
         const blockNode = document.getElementById(`inspector-ch-block-${si}`);
 
         if (si === activeInspectorChannel) {
-            if (rangeInput && rangeInput !== document.activeElement)
-                {rangeInput.value = p.state[si];}
-            if (numberInput && numberInput !== document.activeElement)
-                {numberInput.value = p.state[si];}
-            if (labelNode)
-                {labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${p.state[si]})</span>`;}
+            if (rangeInput && rangeInput !== document.activeElement) {
+                rangeInput.value = p.state[si];
+            }
+            if (numberInput && numberInput !== document.activeElement) {
+                numberInput.value = p.state[si];
+            }
+            if (labelNode) {
+                labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${p.state[si]})</span>`;
+            }
         }
         if (blockNode) {
             blockNode.title = `${p.state[si]}`;
             const chanColor = getEffectiveColor(si);
             const isOn = isChannelOn(p.state[si]);
             if (isOn) {
-                blockNode.classList.add("on");
+                blockNode.classList.add('on');
                 blockNode.style.background = chanColor;
                 blockNode.style.opacity = getChannelOpacity(p.state[si]);
             } else {
-                blockNode.classList.remove("on");
-                blockNode.style.background = "#222";
-                blockNode.style.opacity = "1";
+                blockNode.classList.remove('on');
+                blockNode.style.background = '#222';
+                blockNode.style.opacity = '1';
             }
         }
     }
@@ -1862,30 +1936,31 @@ function paintTargetCellNode(path, si) {
 // Applying an inspector-panel edit to every currently selected row.
 // ==========================================================================
 function shiftSelected(dir) {
-    selectedPaths.forEach((path) => shiftPattern(path, dir, false));
+    selectedPaths.forEach(path => shiftPattern(path, dir, false));
     renderTable();
     showToast(`Shifted selection ${dir}`);
 }
 
 function applyInspectorToSelection() {
-    const hasStateChanges =
-        inspectorBuffer && inspectorBuffer.state.some((s) => s !== -1);
+    const hasStateChanges = inspectorBuffer && inspectorBuffer.state.some(s => s !== -1);
     if (
         !inspectorBuffer ||
         selectedPaths.size === 0 ||
         (dirtyFields.size === 0 && !hasStateChanges)
-    )
-        {return;}
+    ) {
+        return;
+    }
 
-    selectedPaths.forEach((path) => {
+    selectedPaths.forEach(path => {
         let p = getObjByPath(path);
-        if (p && p.type !== "group") {
-            if (!p.phases) {p = migratePattern(p);}
-            dirtyFields.forEach((fieldPath) => {
-                const [phaseName, fieldKey] = fieldPath.split(".");
+        if (p && p.type !== 'group') {
+            if (!p.phases) {
+                p = migratePattern(p);
+            }
+            dirtyFields.forEach(fieldPath => {
+                const [phaseName, fieldKey] = fieldPath.split('.');
                 if (p.phases[phaseName]) {
-                    p.phases[phaseName][fieldKey] =
-                        inspectorBuffer.phases[phaseName][fieldKey];
+                    p.phases[phaseName][fieldKey] = inspectorBuffer.phases[phaseName][fieldKey];
                 }
             });
             for (let i = 0; i < config.channels; i++) {
@@ -1900,7 +1975,7 @@ function applyInspectorToSelection() {
     updateJsonPanel();
     renderTable();
     renderInspector();
-    showToast("Applied modified values to selection", "success");
+    showToast('Applied modified values to selection', 'success');
 }
 
 // ==========================================================================
@@ -1908,55 +1983,66 @@ function applyInspectorToSelection() {
 // Building the HTML for the main pattern table.
 // ==========================================================================
 function getTimelineSummary(p) {
-    if (!p.phases) {return "-";}
+    if (!p.phases) {
+        return '-';
+    }
     const parts = [];
-    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-    if (p.phases.in && p.phases.in.type !== "none")
-        {parts.push(
-            `<span style="color:#a5d6ff; font-weight:bold;">In:</span> ${cap(p.phases.in.type)} (${p.phases.in.duration}ms)`,
-        );}
-    if (p.phases.anim && p.phases.anim.type !== "none") {
-        const amt = p.phases.anim.amount ? `x${p.phases.anim.amount}` : "";
+    const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+    if (p.phases.in && p.phases.in.type !== 'none') {
         parts.push(
-            `<span style="color:#ffc107; font-weight:bold;">Anim:</span> ${cap(p.phases.anim.type)} ${amt} (${p.phases.anim.duration}ms)`,
+            `<span style="color:#a5d6ff; font-weight:bold;">In:</span> ${cap(p.phases.in.type)} (${p.phases.in.duration}ms)`
         );
     }
-    if (p.phases.out && p.phases.out.type !== "none")
-        {parts.push(
-            `<span style="color:#28a745; font-weight:bold;">Out:</span> ${cap(p.phases.out.type)} (${p.phases.out.duration}ms)`,
-        );}
-    return parts.join("<br>") || "None";
+    if (p.phases.anim && p.phases.anim.type !== 'none') {
+        const amt = p.phases.anim.amount ? `x${p.phases.anim.amount}` : '';
+        parts.push(
+            `<span style="color:#ffc107; font-weight:bold;">Anim:</span> ${cap(p.phases.anim.type)} ${amt} (${p.phases.anim.duration}ms)`
+        );
+    }
+    if (p.phases.out && p.phases.out.type !== 'none') {
+        parts.push(
+            `<span style="color:#28a745; font-weight:bold;">Out:</span> ${cap(p.phases.out.type)} (${p.phases.out.duration}ms)`
+        );
+    }
+    return parts.join('<br>') || 'None';
 }
 
 function createPatternRowHTML(p, path, isChild = false) {
-    if (!p.phases) {p = migratePattern(p);}
-    const tr = document.createElement("tr");
+    if (!p.phases) {
+        p = migratePattern(p);
+    }
+    const tr = document.createElement('tr');
     tr.dataset.path = path;
-    if (isChild) {tr.className = "group-child";}
-    if (selectedPaths.has(path)) {tr.classList.add("selected");}
-    if (activePath === path && appMode === "edit")
-        {tr.classList.add("active-row");}
+    if (isChild) {
+        tr.className = 'group-child';
+    }
+    if (selectedPaths.has(path)) {
+        tr.classList.add('selected');
+    }
+    if (activePath === path && appMode === 'edit') {
+        tr.classList.add('active-row');
+    }
 
-    tr.onmousedown = (e) => {
+    tr.onmousedown = e => {
         if (
-            e.target.closest("button") ||
-            e.target.classList.contains("block") ||
-            e.target.closest(".actions-cell") ||
-            e.target.closest("input") ||
-            e.target.closest("select")
+            e.target.closest('button') ||
+            e.target.classList.contains('block') ||
+            e.target.closest('.actions-cell') ||
+            e.target.closest('input') ||
+            e.target.closest('select')
         ) {
             return;
         }
         setActivePath(path);
-        if (appMode === "select") {
+        if (appMode === 'select') {
             saveSelectionState();
             isDraggingSelection = true;
             if (selectedPaths.has(path)) {
                 selectedPaths.delete(path);
-                dragTargetState = "deselect";
+                dragTargetState = 'deselect';
             } else {
                 selectedPaths.add(path);
-                dragTargetState = "select";
+                dragTargetState = 'select';
             }
             renderTableSelection();
         }
@@ -1966,15 +2052,15 @@ function createPatternRowHTML(p, path, isChild = false) {
         .map((s, si) => {
             const val = parseFloat(s) || 0;
             const isOn = isChannelOn(val);
-            let styleStr = "";
+            let styleStr = '';
             const chanColor = getEffectiveColor(si);
             if (isOn) {
                 const opacity = getChannelOpacity(val);
                 styleStr = `style="background: ${chanColor}; opacity: ${opacity};"`;
             }
-            return `<div class="block ${isOn ? "on" : ""}" ${styleStr} onmousedown="event.stopPropagation(); activePath='${path}'; startPaintStrokeDrag('${path}', ${si})" onmouseenter="enterPaintStrokeDrag('${path}', ${si})" title="${val}"></div>`;
+            return `<div class="block ${isOn ? 'on' : ''}" ${styleStr} onmousedown="event.stopPropagation(); activePath='${path}'; startPaintStrokeDrag('${path}', ${si})" onmouseenter="enterPaintStrokeDrag('${path}', ${si})" title="${val}"></div>`;
         })
-        .join("")}</div>`;
+        .join('')}</div>`;
 
     const summaryHtml = `<div style="font-size: 10px; color:#aaa; white-space: normal; line-height:1.4;">${getTimelineSummary(p)}</div>`;
 
@@ -1993,63 +2079,71 @@ function createPatternRowHTML(p, path, isChild = false) {
                 </div>
             </td>`;
 
-    const handle = tr.querySelector(".drag-handle");
+    const handle = tr.querySelector('.drag-handle');
     handle.onmouseenter = () => (tr.draggable = true);
     handle.onmouseleave = () => {
-        if (!tr.classList.contains("dragging")) {tr.draggable = false;}
+        if (!tr.classList.contains('dragging')) {
+            tr.draggable = false;
+        }
     };
     tr.onmouseup = () => {
         tr.draggable = false;
-        tr.classList.remove("dragging");
+        tr.classList.remove('dragging');
     };
     tr.onmouseenter = () => {
-        if (isDraggingSelection && appMode === "select" && dragTargetState) {
-            if (dragTargetState === "select") {selectedPaths.add(path);}
-            else {selectedPaths.delete(path);}
+        if (isDraggingSelection && appMode === 'select' && dragTargetState) {
+            if (dragTargetState === 'select') {
+                selectedPaths.add(path);
+            } else {
+                selectedPaths.delete(path);
+            }
             renderTableSelection();
         }
     };
 
-    tr.ondragstart = (e) => {
-        tr.classList.add("dragging");
-        e.dataTransfer.setData("text/plain", path);
-        e.dataTransfer.effectAllowed = "move";
+    tr.ondragstart = e => {
+        tr.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', path);
+        e.dataTransfer.effectAllowed = 'move';
     };
     tr.ondragend = () => {
-        tr.classList.remove("dragging");
+        tr.classList.remove('dragging');
         tr.draggable = false;
     };
-    tr.ondragover = (e) => e.preventDefault();
-    tr.ondrop = (e) => {
+    tr.ondragover = e => e.preventDefault();
+    tr.ondrop = e => {
         e.preventDefault();
-        handleDrop(path, e.dataTransfer.getData("text/plain"));
+        handleDrop(path, e.dataTransfer.getData('text/plain'));
     };
 
     return tr;
 }
 
 function renderTable(skipInspector = false) {
-    const list = document.getElementById("pattern-list");
-    list.innerHTML = "";
+    const list = document.getElementById('pattern-list');
+    list.innerHTML = '';
     config.patterns.forEach((item, gIdx) => {
-        if (item.type === "group") {
-            const gTr = document.createElement("tr");
-            gTr.className = "group-header";
+        if (item.type === 'group') {
+            const gTr = document.createElement('tr');
+            gTr.className = 'group-header';
             gTr.dataset.groupPath = `${gIdx}`;
-            if (activePath === `${gIdx}` && appMode === "edit")
-                {gTr.classList.add("active-row");}
-            if (soloGroupIdx === gIdx) {gTr.classList.add("solo-active");}
+            if (activePath === `${gIdx}` && appMode === 'edit') {
+                gTr.classList.add('active-row');
+            }
+            if (soloGroupIdx === gIdx) {
+                gTr.classList.add('solo-active');
+            }
 
-            gTr.onmousedown = (e) => {
+            gTr.onmousedown = e => {
                 if (
-                    e.target.closest("button") ||
-                    e.target.closest("input") ||
-                    e.target.closest("label") ||
-                    e.target.closest(".actions-cell")
+                    e.target.closest('button') ||
+                    e.target.closest('input') ||
+                    e.target.closest('label') ||
+                    e.target.closest('.actions-cell')
                 ) {
                     return;
                 }
-                if (appMode === "select") {
+                if (appMode === 'select') {
                     toggleGroupSelection(gIdx);
                     setActivePath(`${gIdx}`);
                 } else {
@@ -2061,11 +2155,11 @@ function renderTable(skipInspector = false) {
                     <td colspan="2" style="padding-left:10px;">
                         <span class="label-text" style="color:var(--accent);">PATTERN GROUP</span><span style="margin-left: 15px; font-size:10px; color:#888;">REPEAT:</span>
                         <input type="number" class="group-repeat-input" value="${item.repeat}" onchange="updateGroupVal('${gIdx}', 'repeat', this.value, true)">
-                        <label class="bounce-toggle"><input type="checkbox" ${item.bounce ? "checked" : ""} onchange="updateGroupVal('${gIdx}', 'bounce', this.checked, true)"> BOUNCE</label>
+                        <label class="bounce-toggle"><input type="checkbox" ${item.bounce ? 'checked' : ''} onchange="updateGroupVal('${gIdx}', 'bounce', this.checked, true)"> BOUNCE</label>
                     </td>
                     <td>
                         <div class="actions-cell">
-                             <button class="btn-icon btn-solo ${soloGroupIdx === gIdx ? "active" : ""}" onclick="toggleSolo(${gIdx})">SOLO</button>
+                             <button class="btn-icon btn-solo ${soloGroupIdx === gIdx ? 'active' : ''}" onclick="toggleSolo(${gIdx})">SOLO</button>
                              <button class="btn-icon" onclick="invertGroup(${gIdx})"><img src="/assets/invert.svg" class="icon icon-sm"></button>
                              <button class="btn-icon" onclick="duplicateGroup(${gIdx})"><img src="/assets/duplicate.svg" class="icon icon-sm"></button>
                              <button class="btn-icon" onclick="removePattern('${gIdx}')"><img src="/assets/delete.svg" class="icon icon-sm"></button>
@@ -2073,38 +2167,40 @@ function renderTable(skipInspector = false) {
                         </div>
                     </td>`;
 
-            const handle = gTr.querySelector(".drag-handle");
+            const handle = gTr.querySelector('.drag-handle');
             handle.onmouseenter = () => (gTr.draggable = true);
             handle.onmouseleave = () => {
-                if (!gTr.classList.contains("dragging")) {gTr.draggable = false;}
+                if (!gTr.classList.contains('dragging')) {
+                    gTr.draggable = false;
+                }
             };
             gTr.onmouseup = () => {
                 gTr.draggable = false;
-                gTr.classList.remove("dragging");
+                gTr.classList.remove('dragging');
             };
 
-            gTr.ondragstart = (e) => {
-                gTr.classList.add("dragging");
-                e.dataTransfer.setData("text/plain", `${gIdx}`);
-                e.dataTransfer.effectAllowed = "move";
+            gTr.ondragstart = e => {
+                gTr.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', `${gIdx}`);
+                e.dataTransfer.effectAllowed = 'move';
             };
             gTr.ondragend = () => {
-                gTr.classList.remove("dragging");
+                gTr.classList.remove('dragging');
                 gTr.draggable = false;
             };
-            gTr.ondragover = (e) => e.preventDefault();
-            gTr.ondrop = (e) => {
+            gTr.ondragover = e => e.preventDefault();
+            gTr.ondrop = e => {
                 e.preventDefault();
-                handleDrop(`${gIdx}`, e.dataTransfer.getData("text/plain"));
+                handleDrop(`${gIdx}`, e.dataTransfer.getData('text/plain'));
             };
 
             list.appendChild(gTr);
             item.patterns.forEach((child, pIdx) =>
-                list.appendChild(
-                    createPatternRowHTML(child, `${gIdx}-${pIdx}`, true),
-                ),
+                list.appendChild(createPatternRowHTML(child, `${gIdx}-${pIdx}`, true))
             );
-        } else {list.appendChild(createPatternRowHTML(item, `${gIdx}`, false));}
+        } else {
+            list.appendChild(createPatternRowHTML(item, `${gIdx}`, false));
+        }
     });
     renderTableSelection(skipInspector);
     updateJsonPanel();
@@ -2112,14 +2208,17 @@ function renderTable(skipInspector = false) {
 
 function toggleGroupSelection(gIdx) {
     const group = config.patterns[gIdx];
-    if (!group || group.type !== "group") {return;}
+    if (!group || group.type !== 'group') {
+        return;
+    }
     saveSelectionState();
-    const allSelected = group.patterns.every((_, pIdx) =>
-        selectedPaths.has(`${gIdx}-${pIdx}`),
-    );
+    const allSelected = group.patterns.every((_, pIdx) => selectedPaths.has(`${gIdx}-${pIdx}`));
     group.patterns.forEach((_, pIdx) => {
-        if (allSelected) {selectedPaths.delete(`${gIdx}-${pIdx}`);}
-        else {selectedPaths.add(`${gIdx}-${pIdx}`);}
+        if (allSelected) {
+            selectedPaths.delete(`${gIdx}-${pIdx}`);
+        } else {
+            selectedPaths.add(`${gIdx}-${pIdx}`);
+        }
     });
     renderTableSelection();
 }
@@ -2131,12 +2230,15 @@ function toggleGroupSelection(gIdx) {
 function selectInspectorChannel(si) {
     activeInspectorChannel = si;
     renderInspector();
-    if (previewMode === "custom") {
-        const numEl = document.getElementById("shape-control-ch-num");
-        if (numEl) {numEl.innerText = si !== -1 ? si + 1 : "-";}
-        const selectEl = document.getElementById("canvas-item-shape");
-        if (selectEl && si !== -1 && canvasLayoutData[si])
-            {selectEl.value = canvasLayoutData[si].shape;}
+    if (previewMode === 'custom') {
+        const numEl = document.getElementById('shape-control-ch-num');
+        if (numEl) {
+            numEl.innerText = si !== -1 ? si + 1 : '-';
+        }
+        const selectEl = document.getElementById('canvas-item-shape');
+        if (selectEl && si !== -1 && canvasLayoutData[si]) {
+            selectEl.value = canvasLayoutData[si].shape;
+        }
 
         if (activePath) {
             const currP = getObjByPath(activePath);
@@ -2146,30 +2248,38 @@ function selectInspectorChannel(si) {
             }
         } else {
             renderLights(
-                new Array(config.channels).fill(
-                    config.properties.pwm.min || DEFAULT_PWM_MIN,
-                ),
+                new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                false,
+                false
             );
         }
     }
 }
 
 function updateInspectorChannelVolume(si, val) {
-    if (si === -1) {return;}
+    if (si === -1) {
+        return;
+    }
     let num = parseFloat(val);
-    if (isNaN(num)) {num = 0;}
+    if (isNaN(num)) {
+        num = 0;
+    }
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    if (num < min) {num = min;}
-    if (num > max) {num = max;}
+    if (num < min) {
+        num = min;
+    }
+    if (num > max) {
+        num = max;
+    }
     num = Math.round(num);
 
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
             let p = getObjByPath(activePath);
-            if (!p.phases) {p = migratePattern(p);}
+            if (!p.phases) {
+                p = migratePattern(p);
+            }
             inspectorBuffer = {
                 phases: JSON.parse(JSON.stringify(p.phases)),
                 state: new Array(config.channels).fill(-1),
@@ -2177,11 +2287,11 @@ function updateInspectorChannelVolume(si, val) {
         }
         inspectorBuffer.state[si] = num;
 
-        const applyBtn = document.getElementById("btn-apply-selection");
+        const applyBtn = document.getElementById('btn-apply-selection');
         if (applyBtn) {
-            applyBtn.removeAttribute("disabled");
+            applyBtn.removeAttribute('disabled');
             applyBtn.style.cssText =
-                "width: 100%; justify-content: center; background: var(--success);";
+                'width: 100%; justify-content: center; background: var(--success);';
         }
     } else {
         const p = getObjByPath(activePath);
@@ -2196,19 +2306,19 @@ function updateInspectorChannelVolume(si, val) {
         }
     }
 
-    const labelNode = document.getElementById("inspector-dimmer-label");
+    const labelNode = document.getElementById('inspector-dimmer-label');
     if (labelNode) {
         labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${num})</span>`;
     }
 
-    const rangeInput = document.getElementById("inspector-dimmer-range");
+    const rangeInput = document.getElementById('inspector-dimmer-range');
     if (rangeInput && rangeInput !== document.activeElement) {
         rangeInput.value = num;
         rangeInput.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
         rangeInput.max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     }
 
-    const numberInput = document.getElementById("inspector-dimmer-number");
+    const numberInput = document.getElementById('inspector-dimmer-number');
     if (numberInput && numberInput !== document.activeElement) {
         numberInput.value = num;
         numberInput.min = config.properties.pwm.min || DEFAULT_PWM_MIN;
@@ -2221,13 +2331,13 @@ function updateInspectorChannelVolume(si, val) {
         const chanColor = getEffectiveColor(si);
         const isOn = isChannelOn(num);
         if (isOn) {
-            blockNode.classList.add("on");
+            blockNode.classList.add('on');
             blockNode.style.background = chanColor;
             blockNode.style.opacity = getChannelOpacity(num);
         } else {
-            blockNode.classList.remove("on");
-            blockNode.style.background = "#222";
-            blockNode.style.opacity = "1";
+            blockNode.classList.remove('on');
+            blockNode.style.background = '#222';
+            blockNode.style.opacity = '1';
         }
     }
 }
@@ -2243,8 +2353,7 @@ function toggleBackgroundDim(target = null) {
     // If target is null, we are editing the default pattern
     if (target === null) {
         // Toggle default pattern's backgroundDim
-        config.defaultPattern.backgroundDim =
-            !config.defaultPattern.backgroundDim;
+        config.defaultPattern.backgroundDim = !config.defaultPattern.backgroundDim;
         updateJsonPanel();
         renderInspector();
         // No preview update needed because default doesn't affect live preview
@@ -2252,7 +2361,9 @@ function toggleBackgroundDim(target = null) {
     }
     // Otherwise, toggle on the given pattern (path)
     const p = getObjByPath(target);
-    if (!p || p.type === "group") {return;}
+    if (!p || p.type === 'group') {
+        return;
+    }
     p.backgroundDim = !p.backgroundDim;
     updateJsonPanel();
     renderTable();
@@ -2266,22 +2377,26 @@ function toggleBackgroundDim(target = null) {
 // Helper to update a phase property on the default pattern
 function updateDefaultPhase(phase, key, value, refreshInspector = false) {
     const dp = config.defaultPattern;
-    if (key === "type") {
+    if (key === 'type') {
         dp.phases[phase].type = value;
-        if (value !== "none" && !dp.phases[phase].duration)
-            {dp.phases[phase].duration = 500;}
-        if (value === "flicker" && !dp.phases[phase].amount)
-            {dp.phases[phase].amount = 3;}
+        if (value !== 'none' && !dp.phases[phase].duration) {
+            dp.phases[phase].duration = 500;
+        }
+        if (value === 'flicker' && !dp.phases[phase].amount) {
+            dp.phases[phase].amount = 3;
+        }
     } else {
         dp.phases[phase][key] = parseInt(value) || 0;
     }
     updateJsonPanel();
-    if (refreshInspector) {renderInspector();}
+    if (refreshInspector) {
+        renderInspector();
+    }
 }
 
 // Helper to render the default pattern inspector (when no pattern selected)
 function renderDefaultInspector() {
-    const container = document.getElementById("inspector-content");
+    const container = document.getElementById('inspector-content');
     const dp = config.defaultPattern;
 
     const effectiveInType = dp.phases.in.type;
@@ -2292,7 +2407,7 @@ function renderDefaultInspector() {
                 <div class="inspector-section" style="margin-top: 12px;">
                     <div class="inspector-label">Background Dim</div>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" ${dp.backgroundDim ? "checked" : ""} onchange="toggleBackgroundDim(null)">
+                        <input type="checkbox" ${dp.backgroundDim ? 'checked' : ''} onchange="toggleBackgroundDim(null)">
                         Enabled
                     </label>
                     <div style="font-size: 10px; color: #666; margin-top: 4px;">
@@ -2310,29 +2425,29 @@ function renderDefaultInspector() {
                 <div class="inspector-section">
                     <div class="inspector-label">1. In-Transition</div>
                     <select class="inspector-select" onchange="updateDefaultPhase('in', 'type', this.value, true)">
-                        <option value="none" ${effectiveInType === "none" ? "selected" : ""}>None</option>
-                        <option value="fade" ${effectiveInType === "fade" ? "selected" : ""}>Fade</option>
-                        <option value="steady" ${effectiveInType === "steady" ? "selected" : ""}>Steady</option>
+                        <option value="none" ${effectiveInType === 'none' ? 'selected' : ''}>None</option>
+                        <option value="fade" ${effectiveInType === 'fade' ? 'selected' : ''}>Fade</option>
+                        <option value="steady" ${effectiveInType === 'steady' ? 'selected' : ''}>Steady</option>
                     </select>
                     ${
-                        effectiveInType !== "none"
+                        effectiveInType !== 'none'
                             ? `
                     <div class="inspector-row">
                         <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
                         <input type="number" value="${dp.phases.in.duration}" oninput="updateDefaultPhase('in', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
 
                 <div class="inspector-section">
                     <div class="inspector-label">2. Animation</div>
                     <select class="inspector-select" onchange="updateDefaultPhase('anim', 'type', this.value, true)">
-                        <option value="none" ${effectiveAnimType === "none" ? "selected" : ""}>None</option>
-                        <option value="flicker" ${effectiveAnimType === "flicker" ? "selected" : ""}>Flicker</option>
+                        <option value="none" ${effectiveAnimType === 'none' ? 'selected' : ''}>None</option>
+                        <option value="flicker" ${effectiveAnimType === 'flicker' ? 'selected' : ''}>Flicker</option>
                     </select>
                     ${
-                        effectiveAnimType === "flicker"
+                        effectiveAnimType === 'flicker'
                             ? `
                     <div class="inspector-row">
                         <span style="font-size:11px; color:#ccc;">Amount:</span>
@@ -2342,25 +2457,25 @@ function renderDefaultInspector() {
                         <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
                         <input type="number" value="${dp.phases.anim.duration}" oninput="updateDefaultPhase('anim', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
 
                 <div class="inspector-section">
                     <div class="inspector-label">3. Out-Transition</div>
                     <select class="inspector-select" onchange="updateDefaultPhase('out', 'type', this.value, true)">
-                        <option value="none" ${effectiveOutType === "none" ? "selected" : ""}>None</option>
-                        <option value="fade" ${effectiveOutType === "fade" ? "selected" : ""}>Fade</option>
-                        <option value="steady" ${effectiveOutType === "steady" ? "selected" : ""}>Steady</option>
+                        <option value="none" ${effectiveOutType === 'none' ? 'selected' : ''}>None</option>
+                        <option value="fade" ${effectiveOutType === 'fade' ? 'selected' : ''}>Fade</option>
+                        <option value="steady" ${effectiveOutType === 'steady' ? 'selected' : ''}>Steady</option>
                     </select>
                     ${
-                        effectiveOutType !== "none"
+                        effectiveOutType !== 'none'
                             ? `
                     <div class="inspector-row">
                         <span style="font-size:11px; color:#ccc;">Duration (ms):</span>
                         <input type="number" value="${dp.phases.out.duration}" oninput="updateDefaultPhase('out', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
 
@@ -2369,7 +2484,7 @@ function renderDefaultInspector() {
 }
 
 function renderInspector() {
-    const container = document.getElementById("inspector-content");
+    const container = document.getElementById('inspector-content');
     // If no active path, show default inspector
     if (!activePath) {
         renderDefaultInspector();
@@ -2377,9 +2492,9 @@ function renderInspector() {
     }
 
     // If active path is a group, show group properties
-    if (!activePath.includes("-")) {
+    if (!activePath.includes('-')) {
         const p = config.patterns[parseInt(activePath)];
-        if (p && p.type === "group") {
+        if (p && p.type === 'group') {
             container.innerHTML = `
                         <div class="inspector-section">
                             <div class="inspector-label">Group Properties</div>
@@ -2389,7 +2504,7 @@ function renderInspector() {
                                     <input type="number" value="${p.repeat}" oninput="updateGroupVal('${activePath}', 'repeat', this.value, false)" style="width:70px;">
                                 </label>
                                 <label style="font-size:11px; display:flex; align-items:center; gap:8px;">
-                                    <input type="checkbox" ${p.bounce ? "checked" : ""} onchange="updateGroupVal('${activePath}', 'bounce', this.checked, false)">
+                                    <input type="checkbox" ${p.bounce ? 'checked' : ''} onchange="updateGroupVal('${activePath}', 'bounce', this.checked, false)">
                                     Bounce (Reverse Play)
                                 </label>
                             </div>
@@ -2401,8 +2516,12 @@ function renderInspector() {
 
     // Otherwise, it's a pattern (not a group)
     let p = getObjByPath(activePath);
-    if (!p) {return;}
-    if (!p.phases) {p = migratePattern(p);}
+    if (!p) {
+        return;
+    }
+    if (!p.phases) {
+        p = migratePattern(p);
+    }
 
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
@@ -2415,23 +2534,22 @@ function renderInspector() {
         inspectorBuffer = null;
     }
 
-    const currentPhases =
-        selectedPaths.size > 0 ? inspectorBuffer.phases : p.phases;
+    const currentPhases = selectedPaths.size > 0 ? inspectorBuffer.phases : p.phases;
 
     const effectiveInType =
-        selectedPaths.size > 0 && !dirtyFields.has("in.type")
+        selectedPaths.size > 0 && !dirtyFields.has('in.type')
             ? p.phases.in.type
             : currentPhases.in.type;
     const effectiveAnimType =
-        selectedPaths.size > 0 && !dirtyFields.has("anim.type")
+        selectedPaths.size > 0 && !dirtyFields.has('anim.type')
             ? p.phases.anim.type
             : currentPhases.anim.type;
     const effectiveOutType =
-        selectedPaths.size > 0 && !dirtyFields.has("out.type")
+        selectedPaths.size > 0 && !dirtyFields.has('out.type')
             ? p.phases.out.type
             : currentPhases.out.type;
 
-    let stateBlocksHtml = "";
+    let stateBlocksHtml = '';
     let currentChVal = 0;
 
     if (selectedPaths.size > 0) {
@@ -2444,8 +2562,8 @@ function renderInspector() {
             .map((s, si) => {
                 const isActive =
                     si === activeInspectorChannel
-                        ? "outline: 2px solid var(--accent); outline-offset: 1px;"
-                        : "";
+                        ? 'outline: 2px solid var(--accent); outline-offset: 1px;'
+                        : '';
                 const chanColor = getEffectiveColor(si);
                 if (s === -1) {
                     return `<div class="block" id="inspector-ch-block-${si}" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:10px; font-weight:bold; background:#222; ${isActive}" onclick="selectInspectorChannel(${si})">-</div>`;
@@ -2453,14 +2571,13 @@ function renderInspector() {
                     const val = parseFloat(s) || 0;
                     const isOn = isChannelOn(val);
                     const opacity = getChannelOpacity(val);
-                    return `<div class="block ${isOn ? "on" : ""}" id="inspector-ch-block-${si}" style="background: ${isOn ? chanColor : "#222"}; opacity: ${isOn ? opacity : 1}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${val}"></div>`;
+                    return `<div class="block ${isOn ? 'on' : ''}" id="inspector-ch-block-${si}" style="background: ${isOn ? chanColor : '#222'}; opacity: ${isOn ? opacity : 1}; ${isActive}" onclick="selectInspectorChannel(${si})" title="${val}"></div>`;
                 }
             })
-            .join("");
+            .join('');
     } else {
         currentChVal =
-            activeInspectorChannel !== -1 &&
-            p.state[activeInspectorChannel] !== undefined
+            activeInspectorChannel !== -1 && p.state[activeInspectorChannel] !== undefined
                 ? p.state[activeInspectorChannel]
                 : 0;
         stateBlocksHtml = p.state
@@ -2468,8 +2585,8 @@ function renderInspector() {
                 const val = parseFloat(s) || 0;
                 const isActive =
                     si === activeInspectorChannel
-                        ? "outline: 2px solid var(--accent); outline-offset: 1px;"
-                        : "";
+                        ? 'outline: 2px solid var(--accent); outline-offset: 1px;'
+                        : '';
                 const chanColor = getEffectiveColor(si);
                 const isOn = isChannelOn(val);
                 const opacity = getChannelOpacity(val);
@@ -2479,7 +2596,7 @@ function renderInspector() {
                     return `<div class="block" id="inspector-ch-block-${si}" style="background: #222; ${isActive}" onclick="selectInspectorChannel(${si})" title="0"></div>`;
                 }
             })
-            .join("");
+            .join('');
     }
 
     const displayVal = currentChVal === -1 ? 0 : currentChVal;
@@ -2490,12 +2607,8 @@ function renderInspector() {
               ? ' <span style="color:#777; font-style:italic;">(Unchanged)</span>'
               : ` <span>(${displayVal})</span>`;
 
-    let resetBtnHtml = "";
-    if (
-        selectedPaths.size > 0 &&
-        currentChVal !== -1 &&
-        activeInspectorChannel !== -1
-    ) {
+    let resetBtnHtml = '';
+    if (selectedPaths.size > 0 && currentChVal !== -1 && activeInspectorChannel !== -1) {
         resetBtnHtml = `<button class="btn-compact" style="padding: 2px 6px; font-size: 10px; background: #444; margin-left: auto;" onclick="resetInspectorChannelToUnchanged(${activeInspectorChannel})">RESET</button>`;
     }
 
@@ -2505,25 +2618,25 @@ function renderInspector() {
     const dimmerControlHtml = `
                 <div style="margin-top: 14px; background: #222; padding: 10px; border-radius: 4px; border: 1px solid #333;">
                     <div style="display:flex; align-items:center; margin-bottom: 6px;">
-                        <span id="inspector-dimmer-label" style="font-size:11px; color:#aaa; font-weight:bold;">Ch ${activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : "-"} Level:${sliderLabelExtra}</span>
+                        <span id="inspector-dimmer-label" style="font-size:11px; color:#aaa; font-weight:bold;">Ch ${activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : '-'} Level:${sliderLabelExtra}</span>
                         ${resetBtnHtml}
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="range" id="inspector-dimmer-range" min="${min}" max="${max}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="flex:1; accent-color:var(--accent); cursor:pointer;">
-                        <input type="number" id="inspector-dimmer-number" min="${min}" max="${max}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? "disabled" : ""} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="width:65px; text-align:center;">
+                        <input type="range" id="inspector-dimmer-range" min="${min}" max="${max}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? 'disabled' : ''} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="flex:1; accent-color:var(--accent); cursor:pointer;">
+                        <input type="number" id="inspector-dimmer-number" min="${min}" max="${max}" step="1" value="${displayVal}" ${activeInspectorChannel === -1 ? 'disabled' : ''} oninput="updateInspectorChannelVolume(${activeInspectorChannel}, this.value)" style="width:65px; text-align:center;">
                     </div>
                 </div>
             `;
 
     // Background Dim checkbox (only for non‑group patterns)
-    let bgDimHtml = "";
-    if (p && p.type !== "group") {
+    let bgDimHtml = '';
+    if (p && p.type !== 'group') {
         const bgDimEnabled = p.backgroundDim || false;
         bgDimHtml = `
                 <div class="inspector-section" style="margin-top: 12px;">
                     <div class="inspector-label">Background Dim</div>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" ${bgDimEnabled ? "checked" : ""} onchange="toggleBackgroundDim('${activePath}')">
+                        <input type="checkbox" ${bgDimEnabled ? 'checked' : ''} onchange="toggleBackgroundDim('${activePath}')">
                         Enabled
                     </label>
                     <div style="font-size: 10px; color: #666; margin-top: 4px;">
@@ -2534,16 +2647,14 @@ function renderInspector() {
     }
 
     const hasStateChanges =
-        selectedPaths.size > 0 &&
-        inspectorBuffer &&
-        inspectorBuffer.state.some((s) => s !== -1);
+        selectedPaths.size > 0 && inspectorBuffer && inspectorBuffer.state.some(s => s !== -1);
     const canApply = dirtyFields.size > 0 || hasStateChanges;
 
-    let applyAllButtonHtml = "";
+    let applyAllButtonHtml = '';
     if (selectedPaths.size > 0) {
         applyAllButtonHtml = `
                 <div style="margin-top: 15px;">
-                    <button id="btn-apply-selection" style="width: 100%; justify-content: center; background: var(--success);" onclick="applyInspectorToSelection()" ${!canApply ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ""}>
+                    <button id="btn-apply-selection" style="width: 100%; justify-content: center; background: var(--success);" onclick="applyInspectorToSelection()" ${!canApply ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
                         APPLY TO SELECTION (${selectedPaths.size})
                     </button>
                 </div>`;
@@ -2563,60 +2674,60 @@ function renderInspector() {
                 <div class="inspector-section">
                     <div class="inspector-label">1. In-Transition</div>
                     <select class="inspector-select" onchange="updatePhase('${activePath}', 'in', 'type', this.value, true)">
-                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("in.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
-                        <option value="none" ${effectiveInType === "none" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>None</option>
-                        <option value="fade" ${effectiveInType === "fade" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>Fade</option>
-                        <option value="steady" ${effectiveInType === "steady" && (selectedPaths.size === 0 || dirtyFields.has("in.type")) ? "selected" : ""}>Steady</option>
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has('in.type') ? 'selected' : ''}>---- unchanged ----</option>` : ''}
+                        <option value="none" ${effectiveInType === 'none' && (selectedPaths.size === 0 || dirtyFields.has('in.type')) ? 'selected' : ''}>None</option>
+                        <option value="fade" ${effectiveInType === 'fade' && (selectedPaths.size === 0 || dirtyFields.has('in.type')) ? 'selected' : ''}>Fade</option>
+                        <option value="steady" ${effectiveInType === 'steady' && (selectedPaths.size === 0 || dirtyFields.has('in.type')) ? 'selected' : ''}>Steady</option>
                     </select>
                     ${
-                        effectiveInType !== "none"
+                        effectiveInType !== 'none'
                             ? `
                     <div class="inspector-row">
-                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("in.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has('in.duration') ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ''}</span>
                         <input type="number" value="${currentPhases.in.duration}" oninput="updatePhase('${activePath}', 'in', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
 
                 <div class="inspector-section">
                     <div class="inspector-label">2. Animation</div>
                     <select class="inspector-select" onchange="updatePhase('${activePath}', 'anim', 'type', this.value, true)">
-                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("anim.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
-                        <option value="none" ${effectiveAnimType === "none" && (selectedPaths.size === 0 || dirtyFields.has("anim.type")) ? "selected" : ""}>None</option>
-                        <option value="flicker" ${effectiveAnimType === "flicker" && (selectedPaths.size === 0 || dirtyFields.has("anim.type")) ? "selected" : ""}>Flicker</option>
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has('anim.type') ? 'selected' : ''}>---- unchanged ----</option>` : ''}
+                        <option value="none" ${effectiveAnimType === 'none' && (selectedPaths.size === 0 || dirtyFields.has('anim.type')) ? 'selected' : ''}>None</option>
+                        <option value="flicker" ${effectiveAnimType === 'flicker' && (selectedPaths.size === 0 || dirtyFields.has('anim.type')) ? 'selected' : ''}>Flicker</option>
                     </select>
                     ${
-                        effectiveAnimType === "flicker"
+                        effectiveAnimType === 'flicker'
                             ? `
                     <div class="inspector-row">
-                        <span style="font-size:11px; color:#ccc;">Amount: ${selectedPaths.size > 0 && !dirtyFields.has("anim.amount") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <span style="font-size:11px; color:#ccc;">Amount: ${selectedPaths.size > 0 && !dirtyFields.has('anim.amount') ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ''}</span>
                         <input type="number" value="${currentPhases.anim.amount || 0}" oninput="updatePhase('${activePath}', 'anim', 'amount', this.value, false)" style="width:70px;">
                     </div>
                     <div class="inspector-row">
-                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("anim.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has('anim.duration') ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ''}</span>
                         <input type="number" value="${currentPhases.anim.duration}" oninput="updatePhase('${activePath}', 'anim', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
 
                 <div class="inspector-section">
                     <div class="inspector-label">3. Out-Transition</div>
                     <select class="inspector-select" onchange="updatePhase('${activePath}', 'out', 'type', this.value, true)">
-                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has("out.type") ? "selected" : ""}>---- unchanged ----</option>` : ""}
-                        <option value="none" ${effectiveOutType === "none" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>None</option>
-                        <option value="fade" ${effectiveOutType === "fade" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>Fade</option>
-                        <option value="steady" ${effectiveOutType === "steady" && (selectedPaths.size === 0 || dirtyFields.has("out.type")) ? "selected" : ""}>Steady</option>
+                        ${selectedPaths.size > 0 ? `<option value="unchanged" ${!dirtyFields.has('out.type') ? 'selected' : ''}>---- unchanged ----</option>` : ''}
+                        <option value="none" ${effectiveOutType === 'none' && (selectedPaths.size === 0 || dirtyFields.has('out.type')) ? 'selected' : ''}>None</option>
+                        <option value="fade" ${effectiveOutType === 'fade' && (selectedPaths.size === 0 || dirtyFields.has('out.type')) ? 'selected' : ''}>Fade</option>
+                        <option value="steady" ${effectiveOutType === 'steady' && (selectedPaths.size === 0 || dirtyFields.has('out.type')) ? 'selected' : ''}>Steady</option>
                     </select>
                     ${
-                        effectiveOutType !== "none"
+                        effectiveOutType !== 'none'
                             ? `
                     <div class="inspector-row">
-                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has("out.duration") ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ""}</span>
+                        <span style="font-size:11px; color:#ccc;">Duration (ms): ${selectedPaths.size > 0 && !dirtyFields.has('out.duration') ? '<span style="color:#666; font-style:italic;">(unchanged)</span>' : ''}</span>
                         <input type="number" value="${currentPhases.out.duration}" oninput="updatePhase('${activePath}', 'out', 'duration', this.value, false)" style="width:70px;">
                     </div>`
-                            : ""
+                            : ''
                     }
                 </div>
                 ${applyAllButtonHtml}
@@ -2631,25 +2742,27 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
             let p = getObjByPath(path);
-            if (!p.phases) {p = migratePattern(p);}
+            if (!p.phases) {
+                p = migratePattern(p);
+            }
             inspectorBuffer = {
                 phases: JSON.parse(JSON.stringify(p.phases)),
                 state: new Array(config.channels).fill(-1),
             };
         }
-        if (key === "type") {
-            if (value === "unchanged") {
+        if (key === 'type') {
+            if (value === 'unchanged') {
                 dirtyFields.delete(`${phase}.type`);
                 dirtyFields.delete(`${phase}.duration`);
                 dirtyFields.delete(`${phase}.amount`);
             } else {
                 inspectorBuffer.phases[phase].type = value;
                 dirtyFields.add(`${phase}.type`);
-                if (value !== "none") {
+                if (value !== 'none') {
                     inspectorBuffer.phases[phase].duration = 500;
                     dirtyFields.add(`${phase}.duration`);
                 }
-                if (value === "flicker") {
+                if (value === 'flicker') {
                     inspectorBuffer.phases[phase].amount = 3;
                     dirtyFields.add(`${phase}.amount`);
                 }
@@ -2658,15 +2771,16 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
             inspectorBuffer.phases[phase][key] = parseInt(value) || 0;
             dirtyFields.add(`${phase}.${key}`);
         }
-        if (refreshInspector) {renderInspector();}
-        else {
-            const hasStateChanges = inspectorBuffer.state.some((s) => s !== -1);
+        if (refreshInspector) {
+            renderInspector();
+        } else {
+            const hasStateChanges = inspectorBuffer.state.some(s => s !== -1);
             if (dirtyFields.size > 0 || hasStateChanges) {
-                const applyBtn = document.getElementById("btn-apply-selection");
+                const applyBtn = document.getElementById('btn-apply-selection');
                 if (applyBtn) {
-                    applyBtn.removeAttribute("disabled");
+                    applyBtn.removeAttribute('disabled');
                     applyBtn.style.cssText =
-                        "width: 100%; justify-content: center; background: var(--success);";
+                        'width: 100%; justify-content: center; background: var(--success);';
                 }
             }
         }
@@ -2674,55 +2788,71 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
     }
 
     let p = getObjByPath(path);
-    if (!p.phases) {p = migratePattern(p);}
-    if (key === "type") {
+    if (!p.phases) {
+        p = migratePattern(p);
+    }
+    if (key === 'type') {
         p.phases[phase].type = value;
-        if (value !== "none" && !p.phases[phase].duration)
-            {p.phases[phase].duration = 500;}
-        if (value === "flicker" && !p.phases[phase].amount)
-            {p.phases[phase].amount = 3;}
+        if (value !== 'none' && !p.phases[phase].duration) {
+            p.phases[phase].duration = 500;
+        }
+        if (value === 'flicker' && !p.phases[phase].amount) {
+            p.phases[phase].amount = 3;
+        }
     } else {
         p.phases[phase][key] = parseInt(value) || 0;
     }
 
     updateJsonPanel();
     renderTable();
-    if (refreshInspector) {renderInspector();}
+    if (refreshInspector) {
+        renderInspector();
+    }
 }
 
 function updateGroupVal(path, key, val, refresh = false) {
     const p = config.patterns[parseInt(path)];
-    if (key === "repeat") {p.repeat = parseInt(val) || 1;}
-    if (key === "bounce") {p.bounce = !!val;}
+    if (key === 'repeat') {
+        p.repeat = parseInt(val) || 1;
+    }
+    if (key === 'bounce') {
+        p.bounce = !!val;
+    }
     updateJsonPanel();
-    if (refresh) {renderInspector();}
+    if (refresh) {
+        renderInspector();
+    }
 }
 
 function renderTableSelection(skipInspector = false) {
     const count = selectedPaths.size;
-    document.querySelectorAll("#pattern-list tr").forEach((tr) => {
-        if (tr.dataset.path)
-            {tr.classList.toggle("selected", selectedPaths.has(tr.dataset.path));}
+    document.querySelectorAll('#pattern-list tr').forEach(tr => {
+        if (tr.dataset.path) {
+            tr.classList.toggle('selected', selectedPaths.has(tr.dataset.path));
+        }
     });
-    document.getElementById("del-count-text").innerText =
-        count > 0 ? `(${count})` : "";
+    document.getElementById('del-count-text').innerText = count > 0 ? `(${count})` : '';
     [
-        "sel-clone",
-        "sel-reverse",
-        "sel-invert",
-        "sel-mirror",
-        "sel-left",
-        "sel-right",
-        "sel-clear",
-        "sel-delete",
-        "sel-group",
-        "sel-odd",
-        "sel-even",
-    ].forEach((id) => {
+        'sel-clone',
+        'sel-reverse',
+        'sel-invert',
+        'sel-mirror',
+        'sel-left',
+        'sel-right',
+        'sel-clear',
+        'sel-delete',
+        'sel-group',
+        'sel-odd',
+        'sel-even',
+    ].forEach(id => {
         const el = document.getElementById(id);
-        if (el) {el.disabled = count === 0;}
+        if (el) {
+            el.disabled = count === 0;
+        }
     });
-    if (!skipInspector) {renderInspector();}
+    if (!skipInspector) {
+        renderInspector();
+    }
 }
 
 // ==========================================================================
@@ -2730,77 +2860,67 @@ function renderTableSelection(skipInspector = false) {
 // Runs the configured pattern in real time and drives the live preview.
 // ==========================================================================
 function togglePlayback() {
-    if (isPlaying) {stopStrobe();}
-    else {playStrobe();}
+    if (isPlaying) {
+        stopStrobe();
+    } else {
+        playStrobe();
+    }
 }
 
 function highlightPlayingRow(path) {
-    document
-        .querySelectorAll("#pattern-list tr")
-        .forEach((tr) => tr.classList.remove("playing"));
+    document.querySelectorAll('#pattern-list tr').forEach(tr => tr.classList.remove('playing'));
     if (path && showSteps) {
-        const tr = document.querySelector(
-            `#pattern-list tr[data-path='${path}']`,
-        );
-        if (tr) {tr.classList.add("playing");}
+        const tr = document.querySelector(`#pattern-list tr[data-path='${path}']`);
+        if (tr) {
+            tr.classList.add('playing');
+        }
     }
 }
 
 async function playStrobe() {
-    if (isPlaying) {return;}
+    if (isPlaying) {
+        return;
+    }
     isPlaying = true;
     abortController = new AbortController();
-    const btn = document.getElementById("main-playback-btn");
-    btn.className = "stop-btn";
-    document.getElementById("playback-text").innerText = "STOP";
-    document.getElementById("playback-icon").src = "/assets/stop.svg";
+    const btn = document.getElementById('main-playback-btn');
+    btn.className = 'stop-btn';
+    document.getElementById('playback-text').innerText = 'STOP';
+    document.getElementById('playback-icon').src = '/assets/stop.svg';
     try {
         while (isPlaying) {
-            if (config.patterns.length === 0) {break;}
+            if (config.patterns.length === 0) {
+                break;
+            }
             const indices =
-                soloGroupIdx !== null &&
-                config.patterns[soloGroupIdx]?.type === "group"
+                soloGroupIdx !== null && config.patterns[soloGroupIdx]?.type === 'group'
                     ? [soloGroupIdx]
                     : config.patterns.map((_, i) => i);
             for (const gIdx of indices) {
                 const item = config.patterns[gIdx];
-                if (!item || !isPlaying) {continue;}
-                if (item.type === "group") {
+                if (!item || !isPlaying) {
+                    continue;
+                }
+                if (item.type === 'group') {
                     for (let r = 0; r < item.repeat; r++) {
-                        for (
-                            let pIdx = 0;
-                            pIdx < item.patterns.length;
-                            pIdx++
-                        ) {
-                            if (!isPlaying) {break;}
-                            await playSinglePattern(
-                                item.patterns[pIdx],
-                                `${gIdx}-${pIdx}`,
-                            );
+                        for (let pIdx = 0; pIdx < item.patterns.length; pIdx++) {
+                            if (!isPlaying) {
+                                break;
+                            }
+                            await playSinglePattern(item.patterns[pIdx], `${gIdx}-${pIdx}`);
                         }
-                        if (
-                            item.bounce &&
-                            isPlaying &&
-                            item.patterns.length > 1
-                        ) {
-                            for (
-                                let pIdx = item.patterns.length - 2;
-                                pIdx >= 0;
-                                pIdx--
-                            ) {
-                                if (
-                                    !isPlaying ||
-                                    (pIdx === 0 && r < item.repeat - 1)
-                                )
-                                    {continue;}
-                                await playSinglePattern(
-                                    item.patterns[pIdx],
-                                    `${gIdx}-${pIdx}`,
-                                );
+                        if (item.bounce && isPlaying && item.patterns.length > 1) {
+                            for (let pIdx = item.patterns.length - 2; pIdx >= 0; pIdx--) {
+                                if (!isPlaying || (pIdx === 0 && r < item.repeat - 1)) {
+                                    continue;
+                                }
+                                await playSinglePattern(item.patterns[pIdx], `${gIdx}-${pIdx}`);
                             }
                         }
                     }
-                } else {await playSinglePattern(item, `${gIdx}`);}
+                } else {
+                    await playSinglePattern(item, `${gIdx}`);
+                }
             }
         }
     } catch (e) {}
@@ -2808,72 +2928,72 @@ async function playStrobe() {
 
 async function playSinglePattern(p, path) {
     highlightPlayingRow(path);
-    if (!p.phases) {p = migratePattern(p);}
+    if (!p.phases) {
+        p = migratePattern(p);
+    }
     let timePlayed = false;
     const bgDimEnabled = p.backgroundDim || false;
 
-    if (p.phases.in.type === "fade" && p.phases.in.duration > 0) {
+    if (p.phases.in.type === 'fade' && p.phases.in.duration > 0) {
         renderLights(p.state, p.phases.in.duration, bgDimEnabled);
         await sleep(p.phases.in.duration, abortController.signal);
         timePlayed = true;
-    } else if (p.phases.in.type === "steady" && p.phases.in.duration > 0) {
+    } else if (p.phases.in.type === 'steady' && p.phases.in.duration > 0) {
         renderLights(p.state, 0, bgDimEnabled);
         await sleep(p.phases.in.duration, abortController.signal);
         timePlayed = true;
     }
 
-    if (p.phases.anim.type === "flicker" && p.phases.anim.amount > 0) {
+    if (p.phases.anim.type === 'flicker' && p.phases.anim.amount > 0) {
         const animDur = p.phases.anim.duration > 0 ? p.phases.anim.duration : 500;
         const step = animDur / (p.phases.anim.amount * 2);
         for (let f = 0; f < p.phases.anim.amount * 2; f++) {
-            if (!isPlaying) {break;}
+            if (!isPlaying) {
+                break;
+            }
             renderLights(
                 f % 2 === 0
                     ? p.state
-                    : new Array(config.channels).fill(
-                          config.properties.pwm.min || DEFAULT_PWM_MIN,
-                      ),
+                    : new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
                 0,
-                bgDimEnabled,
+                bgDimEnabled
             );
             await sleep(step, abortController.signal);
         }
         timePlayed = true;
     }
 
-    if (p.phases.out.type === "fade" && p.phases.out.duration > 0) {
+    if (p.phases.out.type === 'fade' && p.phases.out.duration > 0) {
         renderLights(
-            new Array(config.channels).fill(
-                config.properties.pwm.min || DEFAULT_PWM_MIN,
-            ),
+            new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
             p.phases.out.duration,
-            bgDimEnabled,
+            bgDimEnabled
         );
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
-    } else if (p.phases.out.type === "steady" && p.phases.out.duration > 0) {
+    } else if (p.phases.out.type === 'steady' && p.phases.out.duration > 0) {
         renderLights(p.state, 0, bgDimEnabled);
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
     }
-    if (!timePlayed) {await sleep(10, abortController.signal);}
+    if (!timePlayed) {
+        await sleep(10, abortController.signal);
+    }
 }
 
 function stopStrobe() {
     isPlaying = false;
     abortController?.abort();
     highlightPlayingRow(null);
-    const btn = document.getElementById("main-playback-btn");
-    btn.className = "play-btn";
-    document.getElementById("playback-text").innerText = "PLAY";
-    document.getElementById("playback-icon").src = "/assets/play.svg";
+    const btn = document.getElementById('main-playback-btn');
+    btn.className = 'play-btn';
+    document.getElementById('playback-text').innerText = 'PLAY';
+    document.getElementById('playback-icon').src = '/assets/play.svg';
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(
-            config.properties.pwm.min || DEFAULT_PWM_MIN,
-        ),
+        new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
         0,
-        bgDim,
+        bgDim
     );
 }
 
@@ -2884,83 +3004,95 @@ function stopStrobe() {
 // ==========================================================================
 function deletePaths(pathsArray) {
     pathsArray.sort((a, b) => {
-        const [aG, aP] = a.split("-").map(Number);
-        const [bG, bP] = b.split("-").map(Number);
-        if (aG !== bG) {return bG - aG;}
+        const [aG, aP] = a.split('-').map(Number);
+        const [bG, bP] = b.split('-').map(Number);
+        if (aG !== bG) {
+            return bG - aG;
+        }
         return aP !== undefined && bP !== undefined ? bP - aP : 0;
     });
-    pathsArray.forEach((path) => {
-        const [gIdx, pIdx] = path.split("-");
-        if (pIdx === undefined) {config.patterns.splice(Number(gIdx), 1);}
-        else {config.patterns[Number(gIdx)].patterns.splice(Number(pIdx), 1);}
+    pathsArray.forEach(path => {
+        const [gIdx, pIdx] = path.split('-');
+        if (pIdx === undefined) {
+            config.patterns.splice(Number(gIdx), 1);
+        } else {
+            config.patterns[Number(gIdx)].patterns.splice(Number(pIdx), 1);
+        }
     });
-    config.patterns = config.patterns.filter(
-        (p) => p.type !== "group" || p.patterns.length > 0,
-    );
+    config.patterns = config.patterns.filter(p => p.type !== 'group' || p.patterns.length > 0);
 }
 function reverseSelectedOrder() {
-    if (selectedPaths.size < 2) {return;}
+    if (selectedPaths.size < 2) {
+        return;
+    }
     const groups = {};
-    selectedPaths.forEach((path) => {
-        const parts = path.split("-");
-        const key = parts.length > 1 ? `group-${parts[0]}` : "root";
-        if (!groups[key]) {groups[key] = [];}
+    selectedPaths.forEach(path => {
+        const parts = path.split('-');
+        const key = parts.length > 1 ? `group-${parts[0]}` : 'root';
+        if (!groups[key]) {
+            groups[key] = [];
+        }
         groups[key].push(path);
     });
-    Object.keys(groups).forEach((key) => {
-        const paths = groups[key].sort(
-            (a, b) => getIdxByPath(a) - getIdxByPath(b),
-        );
-        if (paths.length < 2) {return;}
+    Object.keys(groups).forEach(key => {
+        const paths = groups[key].sort((a, b) => getIdxByPath(a) - getIdxByPath(b));
+        if (paths.length < 2) {
+            return;
+        }
         const parentArr = getArrByPath(paths[0]);
-        const indices = paths.map((p) => getIdxByPath(p));
-        const items = indices.map((idx) => parentArr[idx]);
+        const indices = paths.map(p => getIdxByPath(p));
+        const items = indices.map(idx => parentArr[idx]);
         items.reverse();
         indices.forEach((idx, i) => (parentArr[idx] = items[i]));
     });
     renderTable();
-    showToast("Reversed order");
+    showToast('Reversed order');
 }
 function invertSelected() {
-    selectedPaths.forEach((path) => invertRow(path, false));
+    selectedPaths.forEach(path => invertRow(path, false));
     renderTable();
-    showToast("Inverted selection");
+    showToast('Inverted selection');
 }
 function mirrorSelected() {
-    selectedPaths.forEach((path) => mirrorPattern(path, false));
+    selectedPaths.forEach(path => mirrorPattern(path, false));
     renderTable();
-    showToast("Mirrored selection");
+    showToast('Mirrored selection');
 }
 function duplicateSelected() {
-    if (selectedPaths.size === 0) {return;}
+    if (selectedPaths.size === 0) {
+        return;
+    }
     const roots = {};
-    selectedPaths.forEach((p) => {
-        const r = p.split("-")[0];
-        if (!roots[r]) {roots[r] = [];}
+    selectedPaths.forEach(p => {
+        const r = p.split('-')[0];
+        if (!roots[r]) {
+            roots[r] = [];
+        }
         roots[r].push(p);
     });
     const sorted = Object.keys(roots)
         .map(Number)
         .sort((a, b) => a - b);
     const clones = [];
-    sorted.forEach((idx) => {
+    sorted.forEach(idx => {
         const item = config.patterns[idx];
         if (
-            item.type === "group" &&
-            !item.patterns.every((_, pIdx) =>
-                selectedPaths.has(`${idx}-${pIdx}`),
-            )
+            item.type === 'group' &&
+            !item.patterns.every((_, pIdx) => selectedPaths.has(`${idx}-${pIdx}`))
         ) {
             item.patterns.forEach((c, pIdx) => {
-                if (selectedPaths.has(`${idx}-${pIdx}`))
-                    {clones.push(JSON.parse(JSON.stringify(c)));}
+                if (selectedPaths.has(`${idx}-${pIdx}`)) {
+                    clones.push(JSON.parse(JSON.stringify(c)));
+                }
             });
-        } else {clones.push(JSON.parse(JSON.stringify(item)));}
+        } else {
+            clones.push(JSON.parse(JSON.stringify(item)));
+        }
     });
     config.patterns.splice(sorted[sorted.length - 1] + 1, 0, ...clones);
     selectedPaths.clear();
     renderTable();
-    showToast("Duplicated selection");
+    showToast('Duplicated selection');
 }
 
 // ==========================================================================
@@ -2968,52 +3100,49 @@ function duplicateSelected() {
 // Add / duplicate / invert / remove individual rows and groups.
 // ==========================================================================
 function deleteSelected() {
-    if (selectedPaths.size === 0) {return;}
+    if (selectedPaths.size === 0) {
+        return;
+    }
     const count = selectedPaths.size;
     const sortedPaths = Array.from(selectedPaths).sort((a, b) => {
-        const [aG, aP] = a.split("-").map(Number);
-        const [bG, bP] = b.split("-").map(Number);
+        const [aG, aP] = a.split('-').map(Number);
+        const [bG, bP] = b.split('-').map(Number);
         return aG === bG ? (aP || 0) - (bP || 0) : aG - bG;
     });
     const lastPath = sortedPaths[sortedPaths.length - 1];
-    const rows = Array.from(
-        document.querySelectorAll("#pattern-list tr"),
-    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
-    const lastIdx = rows.findIndex(
-        (tr) => (tr.dataset.path || tr.dataset.groupPath) === lastPath,
+    const rows = Array.from(document.querySelectorAll('#pattern-list tr')).filter(
+        tr => tr.dataset.path || tr.dataset.groupPath
     );
+    const lastIdx = rows.findIndex(tr => (tr.dataset.path || tr.dataset.groupPath) === lastPath);
     deletePaths(Array.from(selectedPaths));
     selectedPaths.clear();
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
     renderTable();
-    const newRows = Array.from(
-        document.querySelectorAll("#pattern-list tr"),
-    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    const newRows = Array.from(document.querySelectorAll('#pattern-list tr')).filter(
+        tr => tr.dataset.path || tr.dataset.groupPath
+    );
     if (newRows.length > 0) {
         setActivePath(
             newRows[Math.min(lastIdx, newRows.length - 1)].dataset.path ||
-                newRows[Math.min(lastIdx, newRows.length - 1)].dataset
-                    .groupPath,
+                newRows[Math.min(lastIdx, newRows.length - 1)].dataset.groupPath
         );
-    } else {renderInspector();}
+    } else {
+        renderInspector();
+    }
     showToast(`Deleted ${count} items`);
 }
 
 function duplicateGroup(gIdx) {
-    config.patterns.splice(
-        gIdx + 1,
-        0,
-        JSON.parse(JSON.stringify(config.patterns[gIdx])),
-    );
+    config.patterns.splice(gIdx + 1, 0, JSON.parse(JSON.stringify(config.patterns[gIdx])));
     setActivePath((gIdx + 1).toString());
 }
 
 function invertGroup(gIdx) {
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    config.patterns[gIdx].patterns.forEach((p) => {
-        p.state = p.state.map((s) => {
+    config.patterns[gIdx].patterns.forEach(p => {
+        p.state = p.state.map(s => {
             const val = Math.round(parseFloat(s) || 0);
             return max - val;
         });
@@ -3030,7 +3159,7 @@ function addPattern() {
     // Deep clone defaultPattern and add state array
     const newPattern = JSON.parse(JSON.stringify(config.defaultPattern));
     newPattern.state = new Array(config.channels).fill(
-        config.properties.pwm.min || DEFAULT_PWM_MIN,
+        config.properties.pwm.min || DEFAULT_PWM_MIN
     );
     config.patterns.push(newPattern);
     renderTable();
@@ -3046,45 +3175,51 @@ function duplicateRow(path) {
 function invertRow(path, render = true) {
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const p = getObjByPath(path);
-    p.state = p.state.map((s) => {
+    p.state = p.state.map(s => {
         const val = Math.round(parseFloat(s) || 0);
         return max - val;
     });
-    if (render) {renderTable();}
+    if (render) {
+        renderTable();
+    }
 }
 
 function removePattern(path) {
-    const rows = Array.from(
-        document.querySelectorAll("#pattern-list tr"),
-    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
-    const currentIdx = rows.findIndex(
-        (tr) => (tr.dataset.path || tr.dataset.groupPath) === path,
+    const rows = Array.from(document.querySelectorAll('#pattern-list tr')).filter(
+        tr => tr.dataset.path || tr.dataset.groupPath
     );
-    if (!path.includes("-")) {
+    const currentIdx = rows.findIndex(tr => (tr.dataset.path || tr.dataset.groupPath) === path);
+    if (!path.includes('-')) {
         const idx = parseInt(path);
         config.patterns.splice(idx, 1);
-        if (soloGroupIdx === idx) {soloGroupIdx = null;}
-        else if (soloGroupIdx > idx) {soloGroupIdx--;}
-    } else {deletePaths([path]);}
+        if (soloGroupIdx === idx) {
+            soloGroupIdx = null;
+        } else if (soloGroupIdx > idx) {
+            soloGroupIdx--;
+        }
+    } else {
+        deletePaths([path]);
+    }
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
     renderTable();
-    const newRows = Array.from(
-        document.querySelectorAll("#pattern-list tr"),
-    ).filter((tr) => tr.dataset.path || tr.dataset.groupPath);
+    const newRows = Array.from(document.querySelectorAll('#pattern-list tr')).filter(
+        tr => tr.dataset.path || tr.dataset.groupPath
+    );
     if (newRows.length > 0) {
         setActivePath(
             newRows[Math.min(currentIdx, newRows.length - 1)].dataset.path ||
-                newRows[Math.min(currentIdx, newRows.length - 1)].dataset
-                    .groupPath,
+                newRows[Math.min(currentIdx, newRows.length - 1)].dataset.groupPath
         );
-    } else {renderInspector();}
-    showToast("Item deleted");
+    } else {
+        renderInspector();
+    }
+    showToast('Item deleted');
 }
 
 function clearAllPatterns() {
-    if (confirm("Delete ALL rows?")) {
+    if (confirm('Delete ALL rows?')) {
         config.patterns = [];
         selectedPaths.clear();
         activePath = null;
@@ -3102,17 +3237,21 @@ function clearAllPatterns() {
 // ==========================================================================
 function shiftPattern(path, dir, render = true) {
     const p = getObjByPath(path);
-    if (!p || p.type === "group") {return;}
-    dir === "left"
-        ? p.state.push(p.state.shift())
-        : p.state.unshift(p.state.pop());
-    if (render) {renderTable();}
+    if (!p || p.type === 'group') {
+        return;
+    }
+    dir === 'left' ? p.state.push(p.state.shift()) : p.state.unshift(p.state.pop());
+    if (render) {
+        renderTable();
+    }
     updateJsonPanel();
 }
 function mirrorPattern(path, render = true) {
     const p = getObjByPath(path);
     p.state.reverse();
-    if (render) {renderTable();}
+    if (render) {
+        renderTable();
+    }
     updateJsonPanel();
 }
 
@@ -3121,22 +3260,22 @@ function mirrorPattern(path, render = true) {
 // Reordering rows in the table via native HTML5 drag and drop.
 // ==========================================================================
 function handleDrop(target, dragged) {
-    const isTChild = target.includes("-"),
-        isDChild = dragged.includes("-");
+    const isTChild = target.includes('-'),
+        isDChild = dragged.includes('-');
     if (!isTChild && !isDChild) {
         const tIdx = parseInt(target),
             dIdx = parseInt(dragged);
         const indicesToMove = selectedPaths.has(dragged)
             ? Array.from(selectedPaths)
-                  .filter((p) => !p.includes("-"))
+                  .filter(p => !p.includes('-'))
                   .map(Number)
                   .sort((a, b) => a - b)
             : [dIdx];
-        const items = indicesToMove.map((idx) => config.patterns[idx]);
+        const items = indicesToMove.map(idx => config.patterns[idx]);
         for (let i = indicesToMove.length - 1; i >= 0; i--) {
             config.patterns.splice(indicesToMove[i], 1);
         }
-        const insertIdx = tIdx - indicesToMove.filter((idx) => idx < tIdx).length;
+        const insertIdx = tIdx - indicesToMove.filter(idx => idx < tIdx).length;
         config.patterns.splice(insertIdx, 0, ...items);
         const newSelection = new Set();
         for (let i = 0; i < items.length; i++) {
@@ -3144,25 +3283,25 @@ function handleDrop(target, dragged) {
         }
         selectedPaths = newSelection;
     } else if (isTChild && isDChild) {
-        const tG = target.split("-")[0],
-            dG = dragged.split("-")[0];
-        if (tG !== dG) {return;}
+        const tG = target.split('-')[0],
+            dG = dragged.split('-')[0];
+        if (tG !== dG) {
+            return;
+        }
         const gIdx = parseInt(tG),
-            tIdx = parseInt(target.split("-")[1]),
-            dIdx = parseInt(dragged.split("-")[1]);
+            tIdx = parseInt(target.split('-')[1]),
+            dIdx = parseInt(dragged.split('-')[1]);
         const childIndices = selectedPaths.has(dragged)
             ? Array.from(selectedPaths)
-                  .filter((p) => p.startsWith(tG + "-"))
-                  .map((p) => parseInt(p.split("-")[1]))
+                  .filter(p => p.startsWith(tG + '-'))
+                  .map(p => parseInt(p.split('-')[1]))
                   .sort((a, b) => a - b)
             : [dIdx];
-        const children = childIndices.map(
-            (idx) => config.patterns[gIdx].patterns[idx],
-        );
+        const children = childIndices.map(idx => config.patterns[gIdx].patterns[idx]);
         for (let i = childIndices.length - 1; i >= 0; i--) {
             config.patterns[gIdx].patterns.splice(childIndices[i], 1);
         }
-        const insertIdx = tIdx - childIndices.filter((idx) => idx < tIdx).length;
+        const insertIdx = tIdx - childIndices.filter(idx => idx < tIdx).length;
         config.patterns[gIdx].patterns.splice(insertIdx, 0, ...children);
         const newSelection = new Set();
         for (let i = 0; i < children.length; i++) {
@@ -3171,7 +3310,7 @@ function handleDrop(target, dragged) {
         selectedPaths = newSelection;
     }
     renderTable();
-    showToast("Moved selection");
+    showToast('Moved selection');
 }
 
 // ==========================================================================
@@ -3179,7 +3318,7 @@ function handleDrop(target, dragged) {
 // Keeps the raw-JSON textarea in the modal in sync with `config`.
 // ==========================================================================
 function updateJsonPanel() {
-    const el = document.getElementById("json-input"),
+    const el = document.getElementById('json-input'),
         currentJson = JSON.stringify(getOrderedConfig()); // <-- changed
     if (document.activeElement !== el) {
         el.value = JSON.stringify(getOrderedConfig(), null, 2).replace(
@@ -3187,23 +3326,21 @@ function updateJsonPanel() {
             /"state":\s*\[\s+([\s\S]*?)\s+\]/g,
             (m, p) =>
                 `"state": [${p
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter((s) => s !== "")
-                    .join(", ")}]`,
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s !== '')
+                    .join(', ')}]`
         );
     }
-    fetch("/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+    fetch('/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: currentJson,
-    }).catch((e) => {});
+    }).catch(e => {});
     localStorage.setItem(`strobe_config_v${version}`, currentJson);
-    if (
-        !isUndoRedoAction &&
-        (historyIndex === -1 || currentJson !== historyStack[historyIndex])
-    )
-        {saveState(currentJson);}
+    if (!isUndoRedoAction && (historyIndex === -1 || currentJson !== historyStack[historyIndex])) {
+        saveState(currentJson);
+    }
     updateUndoRedoButtons();
 }
 
@@ -3211,28 +3348,32 @@ function updateJsonPanel() {
 // JSON VALIDATION STATUS BAR
 // ==========================================================================
 function getJsonErrorLine(text, position) {
-    return text.substring(0, position).split("\n").length;
+    return text.substring(0, position).split('\n').length;
 }
 
 function showJsonValid() {
-    const bar = document.getElementById("json-status-bar");
-    if (!bar) {return;}
-    bar.classList.remove("status-error");
-    bar.classList.add("status-valid");
+    const bar = document.getElementById('json-status-bar');
+    if (!bar) {
+        return;
+    }
+    bar.classList.remove('status-error');
+    bar.classList.add('status-valid');
     bar.innerHTML = `<img src="/assets/valid.svg" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"> Valid JSON`;
 }
 
 function showJsonError(err) {
-    const bar = document.getElementById("json-status-bar");
-    if (!bar) {return;}
-    bar.classList.remove("status-valid");
-    bar.classList.add("status-error");
-    let message = err && err.message ? err.message : "Invalid JSON";
+    const bar = document.getElementById('json-status-bar');
+    if (!bar) {
+        return;
+    }
+    bar.classList.remove('status-valid');
+    bar.classList.add('status-error');
+    let message = err && err.message ? err.message : 'Invalid JSON';
     const match = message.match(/position (\d+)/);
     if (match) {
         const line = getJsonErrorLine(
-            document.getElementById("json-input").value,
-            parseInt(match[1]),
+            document.getElementById('json-input').value,
+            parseInt(match[1])
         );
         message += ` (line ${line})`;
     }
@@ -3240,13 +3381,13 @@ function showJsonError(err) {
 }
 
 function formatJson() {
-    const jsonInput = document.getElementById("json-input");
+    const jsonInput = document.getElementById('json-input');
     try {
         const obj = JSON.parse(jsonInput.value);
         jsonInput.value = JSON.stringify(obj, null, 2);
         showJsonValid();
     } catch (err) {
-        showToast("Cannot format invalid JSON", "warn");
+        showToast('Cannot format invalid JSON', 'warn');
         showJsonError(err);
     }
 }
@@ -3259,24 +3400,24 @@ function handleManualJsonEdit(val) {
         showJsonError(err);
         return;
     }
-    if (p && typeof p.channels === "number" && Array.isArray(p.patterns)) {
+    if (p && typeof p.channels === 'number' && Array.isArray(p.patterns)) {
         config = p;
         ensureConfigDefaults(); // migrates colors & properties
         syncPinsMappingLength();
         config = migrateConfigToPWM(config);
-        if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
+        if (!config._strobe_editor_version) {
+            config._strobe_editor_version = '1';
+        }
         syncCanvasLayoutLength();
-        document.getElementById("light-bar").innerHTML = "";
-        document.getElementById("custom-layout-view").innerHTML = "";
+        document.getElementById('light-bar').innerHTML = '';
+        document.getElementById('custom-layout-view').innerHTML = '';
         const bgDim = getBackgroundDimForPath(activePath);
         renderLights(
-            new Array(config.channels).fill(
-                config.properties.pwm.min || DEFAULT_PWM_MIN,
-            ),
+            new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
             0,
-            bgDim,
+            bgDim
         );
-        document.getElementById("global-channels").value = config.channels;
+        document.getElementById('global-channels').value = config.channels;
         activePath = null;
         inspectorBuffer = null;
         dirtyFields.clear();
@@ -3284,17 +3425,13 @@ function handleManualJsonEdit(val) {
         renderInspector();
         showJsonValid();
     } else {
-        showJsonError(
-            new Error(
-                "Config must include numeric 'channels' and 'patterns' array",
-            ),
-        );
+        showJsonError(new Error("Config must include numeric 'channels' and 'patterns' array"));
     }
 }
 const sleep = (ms, sig) =>
     new Promise((res, rej) => {
         const t = setTimeout(res, ms);
-        sig?.addEventListener("abort", () => {
+        sig?.addEventListener('abort', () => {
             clearTimeout(t);
             rej();
         });
@@ -3327,50 +3464,44 @@ function syncCanvasLayoutLength() {
         canvasLayoutData.push({
             x: 15 + col * 16,
             y: 25 + row * 40,
-            shape: "circle",
+            shape: 'circle',
         });
     }
     if (canvasLayoutData.length > config.channels) {
         canvasLayoutData = canvasLayoutData.slice(0, config.channels);
     }
-    localStorage.setItem(
-        `strobe_canvas_layout_v${version}`,
-        JSON.stringify(canvasLayoutData),
-    );
+    localStorage.setItem(`strobe_canvas_layout_v${version}`, JSON.stringify(canvasLayoutData));
 }
 
 function setPreviewMode(mode) {
     previewMode = mode;
-    const bar = document.getElementById("light-bar");
-    const customView = document.getElementById("custom-layout-view");
-    const barBtn = document.getElementById("view-bar-btn");
-    const customBtn = document.getElementById("view-custom-btn");
-    const shapeCtrls = document.getElementById("custom-shape-controls");
+    const bar = document.getElementById('light-bar');
+    const customView = document.getElementById('custom-layout-view');
+    const barBtn = document.getElementById('view-bar-btn');
+    const customBtn = document.getElementById('view-custom-btn');
+    const shapeCtrls = document.getElementById('custom-shape-controls');
 
-    document.getElementById("btn-reset-layout").style.display =
-        mode === "custom" ? "inline-flex" : "none";
+    document.getElementById('btn-reset-layout').style.display =
+        mode === 'custom' ? 'inline-flex' : 'none';
 
-    if (mode === "custom") {
-        bar.style.display = "none";
-        customView.style.display = "block";
-        barBtn.style.background = "transparent";
-        customBtn.style.background = "var(--accent)";
-        shapeCtrls.style.display = "flex";
-        document.getElementById("shape-control-ch-num").innerText =
-            activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : "-";
-        if (
-            activeInspectorChannel !== -1 &&
-            canvasLayoutData[activeInspectorChannel]
-        ) {
-            document.getElementById("canvas-item-shape").value =
+    if (mode === 'custom') {
+        bar.style.display = 'none';
+        customView.style.display = 'block';
+        barBtn.style.background = 'transparent';
+        customBtn.style.background = 'var(--accent)';
+        shapeCtrls.style.display = 'flex';
+        document.getElementById('shape-control-ch-num').innerText =
+            activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : '-';
+        if (activeInspectorChannel !== -1 && canvasLayoutData[activeInspectorChannel]) {
+            document.getElementById('canvas-item-shape').value =
                 canvasLayoutData[activeInspectorChannel].shape;
         }
     } else {
-        bar.style.display = "flex";
-        customView.style.display = "none";
-        barBtn.style.background = "var(--accent)";
-        customBtn.style.background = "transparent";
-        shapeCtrls.style.display = "none";
+        bar.style.display = 'flex';
+        customView.style.display = 'none';
+        barBtn.style.background = 'var(--accent)';
+        customBtn.style.background = 'transparent';
+        shapeCtrls.style.display = 'none';
     }
 
     if (activePath) {
@@ -3381,36 +3512,32 @@ function setPreviewMode(mode) {
         }
     } else {
         renderLights(
-            new Array(config.channels).fill(
-                config.properties.pwm.min || DEFAULT_PWM_MIN,
-            ),
+            new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
             0,
-            false,
+            false
         );
     }
 }
 
 function setCanvasItemShape(shape) {
-    const selectedNodes = document.querySelectorAll(
-        "#custom-layout-view .active-node-sel",
-    );
+    const selectedNodes = document.querySelectorAll('#custom-layout-view .active-node-sel');
 
     // Nothing selected -> ask to apply to all
     if (selectedNodes.length === 0) {
         if (
             !confirm(
-                `No channels are selected.\n\nApply "${shape}" to all ${config.channels} indicators?`,
+                `No channels are selected.\n\nApply "${shape}" to all ${config.channels} indicators?`
             )
         ) {
             return;
         }
 
-        canvasLayoutData.forEach((node) => {
+        canvasLayoutData.forEach(node => {
             node.shape = shape;
         });
     } else {
         // Apply only to selected nodes
-        selectedNodes.forEach((node) => {
+        selectedNodes.forEach(node => {
             const idx = parseInt(node.dataset.channel, 10);
             if (canvasLayoutData[idx]) {
                 canvasLayoutData[idx].shape = shape;
@@ -3421,10 +3548,8 @@ function setCanvasItemShape(shape) {
     renderLights(
         isPlaying
             ? currentLightState
-            : new Array(config.channels).fill(
-                  config.properties.pwm.min || DEFAULT_PWM_MIN,
-              ),
-        false,
+            : new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
+        false
     );
 }
 
@@ -3434,11 +3559,13 @@ function handleCanvasNodeMouseDown(e, index) {
     draggedChannelIdx = index;
     selectInspectorChannel(index);
 
-    const container = document.getElementById("custom-layout-view");
+    const container = document.getElementById('custom-layout-view');
     const rect = container.getBoundingClientRect();
 
     function onMouseMove(moveEvent) {
-        if (draggedChannelIdx === null) {return;}
+        if (draggedChannelIdx === null) {
+            return;
+        }
         let relX = ((moveEvent.clientX - rect.left) / rect.width) * 100;
         let relY = ((moveEvent.clientY - rect.top) / rect.height) * 100;
 
@@ -3457,20 +3584,19 @@ function handleCanvasNodeMouseDown(e, index) {
 
     function onMouseUp() {
         draggedChannelIdx = null;
-        localStorage.setItem(
-            `strobe_canvas_layout_v${version}`,
-            JSON.stringify(canvasLayoutData),
-        );
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        localStorage.setItem(`strobe_canvas_layout_v${version}`, JSON.stringify(canvasLayoutData));
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
     }
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
 }
 
 function resetIndicatorPositions() {
-    if (!confirm("Reset position of all indicators?")) {return;}
+    if (!confirm('Reset position of all indicators?')) {
+        return;
+    }
     const cols = Math.ceil(config.channels / 2);
     const topY = 25;
     const bottomY = 65;
@@ -3489,32 +3615,32 @@ function resetIndicatorPositions() {
         canvasLayoutData.push({
             x: startX + col * step,
             y: row === 0 ? topY : bottomY,
-            shape: "circle",
+            shape: 'circle',
         });
     }
 
     renderLights(
         isPlaying
             ? currentLightState
-            : new Array(config.channels).fill(
-                  config.properties.pwm.min || DEFAULT_PWM_MIN,
-              ),
-        false,
+            : new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
+        false
     );
-    showToast("Indicator positions reset", "success");
+    showToast('Indicator positions reset', 'success');
 }
 // ==========================================================================
 // LIGHT PREVIEW RENDERING
 // Draws the current channel state onto the bar/canvas preview.
 // ==========================================================================
 function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
-    const bar = document.getElementById("light-bar");
-    const customView = document.getElementById("custom-layout-view");
-    if (!bar || !customView) {return;}
+    const bar = document.getElementById('light-bar');
+    const customView = document.getElementById('custom-layout-view');
+    if (!bar || !customView) {
+        return;
+    }
 
     // Compute output state with background dimming
     const bgPWM = config.properties.backgroundDim.pwm || 0;
-    const outputState = state.map((val) => {
+    const outputState = state.map(val => {
         const num = parseFloat(val) || 0;
         if (num === 0 && bgDimEnabled) {
             return bgPWM;
@@ -3528,32 +3654,32 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
             JSON.stringify({
-                type: "LIVE",
+                type: 'LIVE',
                 state: outputState,
                 transition: transitionMs,
-            }),
+            })
         );
     }
 
     if (bar.children.length !== state.length) {
-        bar.innerHTML = "";
+        bar.innerHTML = '';
         state.forEach((_, i) => {
-            const container = document.createElement("div");
-            container.className = "light-container";
+            const container = document.createElement('div');
+            container.className = 'light-container';
             container.style.cssText =
-                "display: flex; flex-direction: column; flex: 1; align-items: center; gap: 4px; height: 100%; justify-content: space-between;";
+                'display: flex; flex-direction: column; flex: 1; align-items: center; gap: 4px; height: 100%; justify-content: space-between;';
 
-            const l = document.createElement("div");
-            l.className = "light";
+            const l = document.createElement('div');
+            l.className = 'light';
             l.style.cssText =
-                "width: 100%; flex: 1; background: #222; border-radius: 4px; transition: all 0.05s; border: 1px solid var(--border);";
+                'width: 100%; flex: 1; background: #222; border-radius: 4px; transition: all 0.05s; border: 1px solid var(--border);';
 
-            const controls = document.createElement("div");
-            controls.className = "channel-control";
+            const controls = document.createElement('div');
+            controls.className = 'channel-control';
             controls.style.cssText =
-                "display: flex; align-items: center; gap: 4px; font-size: 10px; color: #888; font-weight: bold; line-height: 1;";
+                'display: flex; align-items: center; gap: 4px; font-size: 10px; color: #888; font-weight: bold; line-height: 1;';
 
-            const numLabel = document.createElement("span");
+            const numLabel = document.createElement('span');
             numLabel.innerText = i + 1;
 
             controls.appendChild(numLabel);
@@ -3564,16 +3690,16 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     }
 
     if (customView.children.length !== state.length) {
-        customView.innerHTML = "";
+        customView.innerHTML = '';
         state.forEach((_, i) => {
-            const el = document.createElement("div");
-            el.className = "canvas-light-node";
+            const el = document.createElement('div');
+            el.className = 'canvas-light-node';
             el.id = `canvas-node-${i}`;
             el.dataset.channel = i;
             el.innerHTML = `<span>${i + 1}</span>`;
 
-            el.onmousedown = (e) => handleCanvasNodeMouseDown(e, i);
-            el.oncontextmenu = (e) => {
+            el.onmousedown = e => handleCanvasNodeMouseDown(e, i);
+            el.oncontextmenu = e => {
                 e.preventDefault();
                 openCustomColorPopup(e, i);
             };
@@ -3587,45 +3713,53 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     }
 
     Array.from(bar.children).forEach((container, i) => {
-        const l = container.querySelector(".light");
-        if (!l) {return;}
-        if (transitionMs > 0)
-            {l.style.transition = `all ${transitionMs}ms ease-in-out`;}
-        else {l.style.transition = `all 0.05s`;}
+        const l = container.querySelector('.light');
+        if (!l) {
+            return;
+        }
+        if (transitionMs > 0) {
+            l.style.transition = `all ${transitionMs}ms ease-in-out`;
+        } else {
+            l.style.transition = `all 0.05s`;
+        }
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
         const chanColor = getEffectiveColor(i);
         if (isOn) {
-            l.classList.add("on");
+            l.classList.add('on');
             l.style.background = chanColor;
             l.style.borderColor = chanColor;
             l.style.opacity = opacity;
             l.style.boxShadow = `0 0 ${15 * opacity}px ${chanColor}`;
         } else {
-            l.classList.remove("on");
-            l.style.background = "#222";
-            l.style.borderColor = "var(--border)";
+            l.classList.remove('on');
+            l.style.background = '#222';
+            l.style.borderColor = 'var(--border)';
             l.style.opacity = 1;
-            l.style.boxShadow = "none";
+            l.style.boxShadow = 'none';
         }
     });
 
     Array.from(customView.children).forEach((el, i) => {
         const layout = canvasLayoutData[i];
-        if (!layout) {return;}
+        if (!layout) {
+            return;
+        }
 
         el.className = `canvas-light-node shape-${layout.shape}`;
-        if (i === activeInspectorChannel && previewMode === "custom") {
-            el.classList.add("active-node-sel");
+        if (i === activeInspectorChannel && previewMode === 'custom') {
+            el.classList.add('active-node-sel');
         }
 
         el.style.left = `${layout.x}%`;
         el.style.top = `${layout.y}%`;
 
-        if (transitionMs > 0)
-            {el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;}
-        else {el.style.transition = `all 0.05s, left 0s, top 0s`;}
+        if (transitionMs > 0) {
+            el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;
+        } else {
+            el.style.transition = `all 0.05s, left 0s, top 0s`;
+        }
 
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
@@ -3636,13 +3770,13 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
             el.style.borderColor = chanColor;
             el.style.opacity = opacity;
             el.style.boxShadow = `0 0 ${15 * opacity}px ${chanColor}`;
-            el.style.color = "#000";
+            el.style.color = '#000';
         } else {
-            el.style.background = "#222";
-            el.style.borderColor = "var(--border)";
+            el.style.background = '#222';
+            el.style.borderColor = 'var(--border)';
             el.style.opacity = 1;
-            el.style.boxShadow = "none";
-            el.style.color = "#fff";
+            el.style.boxShadow = 'none';
+            el.style.color = '#fff';
         }
     });
 }
@@ -3652,25 +3786,23 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 // Loads the saved config, restores history, and renders the initial UI
 // once the DOM is ready.
 // ==========================================================================
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Load user preferences from localStorage
-    const savedIncrement = localStorage.getItem("strobe_brush_increment");
+    const savedIncrement = localStorage.getItem('strobe_brush_increment');
     if (savedIncrement !== null) {
-        brushIncrement = Math.round(
-            Math.min(1023, Math.max(1, parseFloat(savedIncrement))),
-        );
+        brushIncrement = Math.round(Math.min(1023, Math.max(1, parseFloat(savedIncrement))));
     } else {
         brushIncrement = 100;
-        localStorage.setItem("strobe_brush_increment", brushIncrement);
+        localStorage.setItem('strobe_brush_increment', brushIncrement);
     }
     syncStepUI();
 
     try {
-        const response = await fetch("/config.json");
+        const response = await fetch('/config.json');
         if (response.ok) {
             config = await response.json();
         } else {
-            throw new Error("Local fallback");
+            throw new Error('Local fallback');
         }
     } catch (e) {
         const savedConfig = localStorage.getItem(`strobe_config_v${version}`);
@@ -3682,15 +3814,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     ensureConfigDefaults(); // migrates colors
     config = migrateConfigToPWM(config);
-    if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
+    if (!config._strobe_editor_version) {
+        config._strobe_editor_version = '1';
+    }
     // ensure indicatorColors are correct
     if (
         !config.properties.indicator.channelColors ||
         config.properties.indicator.channelColors.length !== config.channels
     ) {
-        config.properties.indicator.channelColors = new Array(
-            config.channels,
-        ).fill(default_color);
+        config.properties.indicator.channelColors = new Array(config.channels).fill(default_color);
     }
     loadCanvasLayoutData();
     if (historyStack.length === 0 || historyIndex === -1) {
@@ -3698,24 +3830,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         historyIndex = -1;
         saveState(JSON.stringify(getOrderedConfig()));
     }
-    document.getElementById("global-channels").value = config.channels;
+    document.getElementById('global-channels').value = config.channels;
     const bgDim = getBackgroundDimForPath(activePath);
     renderLights(
-        new Array(config.channels).fill(
-            config.properties.pwm.min || DEFAULT_PWM_MIN,
-        ),
+        new Array(config.channels).fill(config.properties.pwm.min || DEFAULT_PWM_MIN),
         0,
-        bgDim,
+        bgDim
     );
     renderTable();
     renderInspector();
     updateUndoRedoButtons();
 
-    setActiveTool("hybrid");
+    setActiveTool('hybrid');
     setupLayoutPanelsResizers();
 
-    const cv = document.getElementById("custom-layout-view");
-    cv.addEventListener("mousedown", (e) => {
+    const cv = document.getElementById('custom-layout-view');
+    cv.addEventListener('mousedown', e => {
         if (e.target === cv) {
             selectInspectorChannel(-1);
         }
@@ -3727,34 +3857,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Drag handles for resizing the preview header and inspector panel.
 // ==========================================================================
 function setupLayoutPanelsResizers() {
-    const hResizer = document.getElementById("h-resizer");
-    const visualizerHeader = document.querySelector(".visualizer-header");
-    const vResizer = document.getElementById("v-resizer");
-    const inspectorPanel = document.getElementById("inspector-panel");
+    const hResizer = document.getElementById('h-resizer');
+    const visualizerHeader = document.querySelector('.visualizer-header');
+    const vResizer = document.getElementById('v-resizer');
+    const inspectorPanel = document.getElementById('inspector-panel');
 
-    const savedHeaderHeight = localStorage.getItem("strobe_visualizer_height");
+    const savedHeaderHeight = localStorage.getItem('strobe_visualizer_height');
     if (savedHeaderHeight && visualizerHeader) {
         visualizerHeader.style.height = savedHeaderHeight;
     } else if (visualizerHeader) {
-        visualizerHeader.style.height = "145px";
+        visualizerHeader.style.height = '145px';
     }
 
-    const savedInspectorWidth = localStorage.getItem("strobe_inspector_width");
+    const savedInspectorWidth = localStorage.getItem('strobe_inspector_width');
     if (savedInspectorWidth && inspectorPanel) {
         inspectorPanel.style.width = savedInspectorWidth;
     }
 
     if (hResizer && visualizerHeader) {
-        hResizer.addEventListener("dblclick", () => {
-            visualizerHeader.style.height = "145px";
-            localStorage.removeItem("strobe_visualizer_height");
-            showToast("Visualizer preview reset to default layout");
+        hResizer.addEventListener('dblclick', () => {
+            visualizerHeader.style.height = '145px';
+            localStorage.removeItem('strobe_visualizer_height');
+            showToast('Visualizer preview reset to default layout');
         });
 
-        hResizer.addEventListener("mousedown", (e) => {
+        hResizer.addEventListener('mousedown', e => {
             e.preventDefault();
-            hResizer.classList.add("resizing");
-            document.body.classList.add("is-resizing");
+            hResizer.classList.add('resizing');
+            document.body.classList.add('is-resizing');
 
             const startY = e.clientY;
             const startHeight = visualizerHeader.getBoundingClientRect().height;
@@ -3767,32 +3897,29 @@ function setupLayoutPanelsResizers() {
             }
 
             function onMouseUp() {
-                hResizer.classList.remove("resizing");
-                document.body.classList.remove("is-resizing");
-                localStorage.setItem(
-                    "strobe_visualizer_height",
-                    visualizerHeader.style.height,
-                );
-                window.removeEventListener("mousemove", onMouseMove);
-                window.removeEventListener("mouseup", onMouseUp);
+                hResizer.classList.remove('resizing');
+                document.body.classList.remove('is-resizing');
+                localStorage.setItem('strobe_visualizer_height', visualizerHeader.style.height);
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
             }
 
-            window.addEventListener("mousemove", onMouseMove);
-            window.addEventListener("mouseup", onMouseUp);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
         });
     }
 
     if (vResizer && inspectorPanel) {
-        vResizer.addEventListener("dblclick", () => {
-            inspectorPanel.style.width = "";
-            localStorage.removeItem("strobe_inspector_width");
-            showToast("Inspector layout panels width reset to default");
+        vResizer.addEventListener('dblclick', () => {
+            inspectorPanel.style.width = '';
+            localStorage.removeItem('strobe_inspector_width');
+            showToast('Inspector layout panels width reset to default');
         });
 
-        vResizer.addEventListener("mousedown", (e) => {
+        vResizer.addEventListener('mousedown', e => {
             e.preventDefault();
-            vResizer.classList.add("resizing");
-            document.body.classList.add("is-resizing");
+            vResizer.classList.add('resizing');
+            document.body.classList.add('is-resizing');
 
             const startX = e.clientX;
             const startWidth = inspectorPanel.getBoundingClientRect().width;
@@ -3805,18 +3932,15 @@ function setupLayoutPanelsResizers() {
             }
 
             function onMouseUp() {
-                vResizer.classList.remove("resizing");
-                document.body.classList.remove("is-resizing");
-                localStorage.setItem(
-                    "strobe_inspector_width",
-                    inspectorPanel.style.width,
-                );
-                window.removeEventListener("mousemove", onMouseMove);
-                window.removeEventListener("mouseup", onMouseUp);
+                vResizer.classList.remove('resizing');
+                document.body.classList.remove('is-resizing');
+                localStorage.setItem('strobe_inspector_width', inspectorPanel.style.width);
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
             }
 
-            window.addEventListener("mousemove", onMouseMove);
-            window.addEventListener("mouseup", onMouseUp);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
         });
     }
 }
@@ -3829,16 +3953,18 @@ function setupLayoutPanelsResizers() {
 function getOrderedConfig() {
     const cfg = config;
     const orderedKeys = [
-        "_strobe_editor_version",
-        "channels",
-        "properties",
-        "defaultPattern",
-        "patterns",
+        '_strobe_editor_version',
+        'channels',
+        'properties',
+        'defaultPattern',
+        'patterns',
     ];
     const result = {};
     // Add known keys in the desired order
     for (const key of orderedKeys) {
-        if (key in cfg) {result[key] = cfg[key];}
+        if (key in cfg) {
+            result[key] = cfg[key];
+        }
     }
     // Append any remaining keys that were not explicitly ordered
     for (const key of Object.keys(cfg)) {
@@ -3852,30 +3978,26 @@ function getOrderedConfig() {
 let socket;
 
 function initWebSocket() {
-    const ip = config.properties.ipAddress || "192.168.4.1";
-    console.log("[WS] Attempting connection to ws://" + ip + ":81 ...");
+    const ip = config.properties.ipAddress || '192.168.4.1';
+    console.log('[WS] Attempting connection to ws://' + ip + ':81 ...');
     socket = new WebSocket(`ws://${ip}:81`);
 
     socket.onopen = () => {
-        console.log(
-            "[WS] SUCCESS: Connected and synced with ESP32 Strobe Engine!",
-        );
-        showToast("Connected & Synced with ESP32");
+        console.log('[WS] SUCCESS: Connected and synced with ESP32 Strobe Engine!');
+        showToast('Connected & Synced with ESP32');
     };
 
-    socket.onclose = (event) => {
-        console.warn(
-            `[WS] DISCONNECTED: Code ${event.code}, Reason: ${event.reason || "None"}`,
-        );
+    socket.onclose = event => {
+        console.warn(`[WS] DISCONNECTED: Code ${event.code}, Reason: ${event.reason || 'None'}`);
         setTimeout(initWebSocket, 3000);
     };
 
-    socket.onerror = (error) => {
-        console.error("[WS] ERROR DETECTED:", error);
+    socket.onerror = error => {
+        console.error('[WS] ERROR DETECTED:', error);
     };
 
-    socket.onmessage = (e) => {
-        console.log("[WS] RECEIVED FROM ESP32 ->", e.data);
+    socket.onmessage = e => {
+        console.log('[WS] RECEIVED FROM ESP32 ->', e.data);
     };
 }
 
@@ -3887,65 +4009,64 @@ function broadcastLiveState(stateArray) {
         const payload = JSON.stringify({ live: stateArray });
 
         // This will print the exact JSON layout leaving your laptop
-        console.log("[WS] SENT TO ESP32 ->", payload);
+        console.log('[WS] SENT TO ESP32 ->', payload);
 
         socket.send(payload);
     } else {
         console.warn(
-            "[WS] CANNOT SEND: Socket is not open. Current state:",
-            socket ? socket.readyState : "Null",
+            '[WS] CANNOT SEND: Socket is not open. Current state:',
+            socket ? socket.readyState : 'Null'
         );
     }
 }
 
 // Call initialization on window load
-window.addEventListener("load", () => {
+window.addEventListener('load', () => {
     initWebSocket();
 });
 
 // WIRELESS OVER-THE-AIR CONFIGURATION UPLOAD
 function uploadConfigToESP32() {
-    const ip = config.properties.ipAddress || "192.168.4.1";
+    const ip = config.properties.ipAddress || '192.168.4.1';
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         showToast("Upload Failed: Connect to 'Strobe-Editor' hotspot first!");
         return;
     }
-    showToast("Transmitting configuration to MicroSD card...");
+    showToast('Transmitting configuration to MicroSD card...');
 
     fetch(`http://${ip}/upload`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(getOrderedConfig()), // <-- changed
     })
-        .then(async (response) => {
+        .then(async response => {
             if (response.ok) {
-                showToast("Success! Configuration locked to MicroSD memory.");
+                showToast('Success! Configuration locked to MicroSD memory.');
             } else {
                 const errorMsg = await response.text();
-                showToast("Upload rejected: " + errorMsg);
+                showToast('Upload rejected: ' + errorMsg);
             }
         })
-        .catch((err) => {
-            console.error("Upload network exception:", err);
-            showToast("Network Error: Connection timed out or dropped.");
+        .catch(err => {
+            console.error('Upload network exception:', err);
+            showToast('Network Error: Connection timed out or dropped.');
         });
 }
 
 function closeAllModals() {
-    const modalIds = [
-        "help-modal",
-        "json-modal",
-        "preferences-modal",
-        "project-settings-modal",
-    ];
-    modalIds.forEach((id) => {
+    const modalIds = ['help-modal', 'json-modal', 'preferences-modal', 'project-settings-modal'];
+    modalIds.forEach(id => {
         const el = document.getElementById(id);
-        if (el) {el.style.display = "none";}
+        if (el) {
+            el.style.display = 'none';
+        }
     });
 }
 
 function syncPinsMappingLength() {
-    if (!config.properties) {config.properties = {};}
+    if (!config.properties) {
+        config.properties = {};
+    }
     if (!Array.isArray(config.properties.pinsMapping)) {
         config.properties.pinsMapping = [];
     }
@@ -3953,20 +4074,15 @@ function syncPinsMappingLength() {
         config.properties.pinsMapping.push(null);
     }
     if (config.properties.pinsMapping.length > config.channels) {
-        config.properties.pinsMapping = config.properties.pinsMapping.slice(
-            0,
-            config.channels,
-        );
+        config.properties.pinsMapping = config.properties.pinsMapping.slice(0, config.channels);
     }
 }
 function updatePinMapping(channelIndex, value) {
-    if (value === "") {
+    if (value === '') {
         config.properties.pinsMapping[channelIndex] = null;
     } else {
         const pin = parseInt(value);
-        config.properties.pinsMapping[channelIndex] = Number.isNaN(pin)
-            ? null
-            : pin;
+        config.properties.pinsMapping[channelIndex] = Number.isNaN(pin) ? null : pin;
     }
     updateJsonPanel();
 }
@@ -3975,12 +4091,14 @@ function updateIpAddress(value) {
     updateJsonPanel();
 }
 function renderPinsMappingUI() {
-    const container = document.getElementById("pins-mapping-container");
-    if (!container) {return;}
+    const container = document.getElementById('pins-mapping-container');
+    if (!container) {
+        return;
+    }
     const pins = config.properties.pinsMapping || [];
-    let html = "";
+    let html = '';
     for (let i = 0; i < config.channels; i++) {
-        const val = pins[i] !== undefined && pins[i] !== null ? pins[i] : "";
+        const val = pins[i] !== undefined && pins[i] !== null ? pins[i] : '';
         html += `
             <div style="display: flex; align-items: center; gap: 6px; background: #1a1a1a; padding: 4px 8px; border-radius: 4px; border: 1px solid #333;">
                 <span style="font-size: 11px; font-weight: bold; color: #aaa; min-width: 32px;">CH${i + 1}</span>

@@ -21,7 +21,7 @@
 /* BASE / LAYOUT */
 /* ========================================================================== */
 body {
-    font-family: "Segoe UI", system-ui, sans-serif;
+    font-family: 'Segoe UI', system-ui, sans-serif;
     background: var(--bg-main);
     color: var(--text);
     margin: 0;
@@ -56,13 +56,13 @@ body.is-resizing {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
 
-input[type="number"] {
+input[type='number'] {
     -moz-appearance: textfield;
     background: #1e1e1e;
     border: 1px solid #444;
@@ -78,9 +78,9 @@ input[type="number"] {
 input:focus,
 button:focus,
 select:focus,
-[role="button"]:focus,
-[role="switch"]:focus,
-[role="separator"]:focus {
+[role='button']:focus,
+[role='switch']:focus,
+[role='separator']:focus {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
@@ -88,18 +88,18 @@ select:focus,
 input:focus:not(:focus-visible),
 button:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
-[role="button"]:focus:not(:focus-visible),
-[role="switch"]:focus:not(:focus-visible),
-[role="separator"]:focus:not(:focus-visible) {
+[role='button']:focus:not(:focus-visible),
+[role='switch']:focus:not(:focus-visible),
+[role='separator']:focus:not(:focus-visible) {
     outline: none;
 }
 
 input:focus-visible,
 button:focus-visible,
 select:focus-visible,
-[role="button"]:focus-visible,
-[role="switch"]:focus-visible,
-[role="separator"]:focus-visible {
+[role='button']:focus-visible,
+[role='switch']:focus-visible,
+[role='separator']:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
@@ -867,7 +867,7 @@ tr.group-header {
 #json-status-bar {
     margin-top: 10px;
     font-size: 11px;
-    font-family: "Consolas", monospace;
+    font-family: 'Consolas', monospace;
     padding: 6px 10px;
     border-radius: 4px;
     background: #111;
