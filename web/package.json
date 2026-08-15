@@ -1,0 +1,16 @@
+{
+  "name": "awa-strobes-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint app.js --cache",
+    "lint:fix": "eslint app.js --fix",
+    "format": "prettier --write app.js index.html style.css",
+    "format:check": "prettier --check app.js index.html style.css"
+  },
+  "devDependencies": {
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.3"
+  }
+}

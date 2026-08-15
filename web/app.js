@@ -144,6 +144,9 @@ function getDefaultConfig() {
 
 let config = getDefaultConfig();
 
+/** @type {number[]} Current light state being displayed (for canvas reset during playback) */
+let currentLightState = [];
+
 let appMode = "edit";
 let showSteps = localStorage.getItem("strobe_show_steps") !== "false";
 let selectedPaths = new Set();
@@ -173,12 +176,12 @@ let brushBrightness = DEFAULT_PWM_MAX;
 // brushIncrement is now stored in localStorage (user preference)
 let brushIncrement = 100;
 let isPaintingActive = false;
-let nodesToggledInCurrentStroke = new Set();
+const nodesToggledInCurrentStroke = new Set();
 
 let isNativePickerOpen = false; // prevents closing popup while native picker is active
 
 let inspectorBuffer = null;
-let dirtyFields = new Set();
+const dirtyFields = new Set();
 
 let historyStack =
     JSON.parse(localStorage.getItem(`strobe_history_v${version}`)) || [];
@@ -195,9 +198,9 @@ let isUndoRedoAction = false;
 // ==========================================================================
 function showToast(msg, type = "info") {
     let color = "linear-gradient(to right, #007bff, #0056b3)";
-    if (type === "history") color = "#cc9a05";
-    if (type === "success") color = "#28a745";
-    if (type === "warn") color = "#dc3545";
+    if (type === "history") {color = "#cc9a05";}
+    if (type === "success") {color = "#28a745";}
+    if (type === "warn") {color = "#dc3545";}
     Toastify({
         text: msg,
         duration: 2000,
@@ -214,8 +217,8 @@ function showToast(msg, type = "info") {
 // ==========================================================================
 function migratePattern(p) {
     if (!p.phases) {
-        let dur = p.duration || 500;
-        let hasFlicker = p.flicker && p.flicker.amount > 0;
+        const dur = p.duration || 500;
+        const hasFlicker = p.flicker && p.flicker.amount > 0;
         p.phases = {
             in:
                 p.fade && p.fade.in > 0
@@ -239,7 +242,7 @@ function migratePattern(p) {
         delete p.flicker;
         delete p.fade;
     }
-    if (p.backgroundDim === undefined) p.backgroundDim = false;
+    if (p.backgroundDim === undefined) {p.backgroundDim = false;}
     return p;
 }
 
@@ -259,7 +262,7 @@ function collectStateValues(patterns, out = []) {
         } else if (Array.isArray(p.state)) {
             p.state.forEach((v) => {
                 const n = parseFloat(v);
-                if (!isNaN(n)) out.push(n);
+                if (!isNaN(n)) {out.push(n);}
             });
         }
     });
@@ -337,11 +340,11 @@ function ensureConfigDefaults() {
     migrateConfigProperties(config);
     const props = config.properties;
 
-    if (props.pwm.min === undefined) props.pwm.min = DEFAULT_PWM_MIN;
-    if (props.pwm.max === undefined) props.pwm.max = DEFAULT_PWM_MAX;
+    if (props.pwm.min === undefined) {props.pwm.min = DEFAULT_PWM_MIN;}
+    if (props.pwm.max === undefined) {props.pwm.max = DEFAULT_PWM_MAX;}
     if (props.pwm.indicatorOffAtMin === undefined)
-        props.pwm.indicatorOffAtMin = false;
-    if (props.backgroundDim.pwm === undefined) props.backgroundDim.pwm = 0;
+        {props.pwm.indicatorOffAtMin = false;}
+    if (props.backgroundDim.pwm === undefined) {props.backgroundDim.pwm = 0;}
     // clamp min < max
     if (props.pwm.min >= props.pwm.max) {
         props.pwm.min = DEFAULT_PWM_MIN;
@@ -376,10 +379,10 @@ function ensureConfigDefaults() {
     (config.patterns || []).forEach((item) => {
         if (item.type === "group") {
             item.patterns.forEach((p) => {
-                if (p.backgroundDim === undefined) p.backgroundDim = false;
+                if (p.backgroundDim === undefined) {p.backgroundDim = false;}
             });
         } else {
-            if (item.backgroundDim === undefined) item.backgroundDim = false;
+            if (item.backgroundDim === undefined) {item.backgroundDim = false;}
         }
     });
     // ensure defaultPattern exists
@@ -402,10 +405,10 @@ function ensureConfigDefaults() {
         };
     }
     if (config.defaultPattern.backgroundDim === undefined)
-        config.defaultPattern.backgroundDim = false;
+        {config.defaultPattern.backgroundDim = false;}
 
-    if (props.ipAddress === undefined) props.ipAddress = "192.168.4.1";
-    if (!Array.isArray(props.pinsMapping)) props.pinsMapping = [];
+    if (props.ipAddress === undefined) {props.ipAddress = "192.168.4.1";}
+    if (!Array.isArray(props.pinsMapping)) {props.pinsMapping = [];}
     // Ensure length matches channels
     syncPinsMappingLength();
 }
@@ -440,7 +443,7 @@ function getChannelOpacity(val) {
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     if (config.properties.pwm.indicatorOffAtMin) {
-        if (val <= min) return 0;
+        if (val <= min) {return 0;}
         return Math.min(1, (val - min) / (max - min));
     } else {
         return Math.min(1, val / max);
@@ -479,10 +482,10 @@ function saveHistoryToLocal() {
 
 function saveState(jsonString) {
     if (historyIndex < historyStack.length - 1)
-        historyStack = historyStack.slice(0, historyIndex + 1);
+        {historyStack = historyStack.slice(0, historyIndex + 1);}
     historyStack.push(jsonString);
-    if (historyStack.length > MAX_HISTORY) historyStack.shift();
-    else historyIndex++;
+    if (historyStack.length > MAX_HISTORY) {historyStack.shift();}
+    else {historyIndex++;}
     updateUndoRedoButtons();
     saveHistoryToLocal();
 }
@@ -511,7 +514,7 @@ function redoState() {
 
 function applyHistoryState() {
     config = JSON.parse(historyStack[historyIndex]);
-    if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+    if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
     ensureConfigDefaults(); // also migrates colors
     syncPinsMappingLength();
     syncCanvasLayoutLength();
@@ -535,8 +538,8 @@ function applyHistoryState() {
 function updateUndoRedoButtons() {
     const u = document.getElementById("btn-undo"),
         r = document.getElementById("btn-redo");
-    if (u) u.disabled = historyIndex <= 0;
-    if (r) r.disabled = historyIndex >= historyStack.length - 1;
+    if (u) {u.disabled = historyIndex <= 0;}
+    if (r) {r.disabled = historyIndex >= historyStack.length - 1;}
 }
 
 // ==========================================================================
@@ -576,12 +579,12 @@ function setActivePath(path) {
 // ==========================================================================
 function saveSelectionState() {
     selectionHistoryStack.push(new Set(selectedPaths));
-    if (selectionHistoryStack.length > 50) selectionHistoryStack.shift();
+    if (selectionHistoryStack.length > 50) {selectionHistoryStack.shift();}
     updateSelectionUndoButton();
 }
 
 function undoSelection() {
-    if (selectionHistoryStack.length === 0) return;
+    if (selectionHistoryStack.length === 0) {return;}
     selectedPaths = selectionHistoryStack.pop();
     renderTableSelection();
     updateSelectionUndoButton();
@@ -590,11 +593,11 @@ function undoSelection() {
 
 function updateSelectionUndoButton() {
     const btn = document.getElementById("sel-undo");
-    if (btn) btn.disabled = selectionHistoryStack.length === 0;
+    if (btn) {btn.disabled = selectionHistoryStack.length === 0;}
 }
 
 function filterSelectionOddEven(type) {
-    if (selectedPaths.size === 0) return;
+    if (selectedPaths.size === 0) {return;}
     saveSelectionState();
     const allVisualPaths = Array.from(
         document.querySelectorAll("#pattern-list tr"),
@@ -606,8 +609,8 @@ function filterSelectionOddEven(type) {
     );
     selectedPaths.clear();
     sortedSelected.forEach((path, idx) => {
-        if (type === "odd" && idx % 2 === 0) selectedPaths.add(path);
-        else if (type === "even" && idx % 2 !== 0) selectedPaths.add(path);
+        if (type === "odd" && idx % 2 === 0) {selectedPaths.add(path);}
+        else if (type === "even" && idx % 2 !== 0) {selectedPaths.add(path);}
     });
     renderTableSelection();
 }
@@ -656,7 +659,7 @@ function openCustomColorPopup(e, context) {
 }
 
 function selectCustomPopupColor(val) {
-    if (!val) return;
+    if (!val) {return;}
     if (config.properties.indicator.mode === "global") {
         config.properties.indicator.globalColor = val;
     } else if (typeof currentPickerContext === "number") {
@@ -696,33 +699,33 @@ document.addEventListener("click", () => {
 // Arrow-key row moves, plus the global keydown handler for all hotkeys.
 // ==========================================================================
 function moveActiveRow(dir) {
-    if (!activePath) return;
+    if (!activePath) {return;}
     const isChild = activePath.includes("-");
     if (isChild) {
-        let [gIdx, pIdx] = activePath.split("-").map(Number);
-        let group = config.patterns[gIdx];
-        if (!group || group.type !== "group") return;
-        let arr = group.patterns;
-        let nextPIdx = dir === "up" ? pIdx - 1 : pIdx + 1;
-        if (nextPIdx < 0 || nextPIdx >= arr.length) return;
+        const [gIdx, pIdx] = activePath.split("-").map(Number);
+        const group = config.patterns[gIdx];
+        if (!group || group.type !== "group") {return;}
+        const arr = group.patterns;
+        const nextPIdx = dir === "up" ? pIdx - 1 : pIdx + 1;
+        if (nextPIdx < 0 || nextPIdx >= arr.length) {return;}
 
-        let temp = arr[pIdx];
+        const temp = arr[pIdx];
         arr[pIdx] = arr[nextPIdx];
         arr[nextPIdx] = temp;
         activePath = `${gIdx}-${nextPIdx}`;
     } else {
-        let gIdx = parseInt(activePath);
-        let arr = config.patterns;
-        let nextGIdx = dir === "up" ? gIdx - 1 : gIdx + 1;
-        if (nextGIdx < 0 || nextGIdx >= arr.length) return;
+        const gIdx = parseInt(activePath);
+        const arr = config.patterns;
+        const nextGIdx = dir === "up" ? gIdx - 1 : gIdx + 1;
+        if (nextGIdx < 0 || nextGIdx >= arr.length) {return;}
 
-        let temp = arr[gIdx];
+        const temp = arr[gIdx];
         arr[gIdx] = arr[nextGIdx];
         arr[nextGIdx] = temp;
         activePath = `${nextGIdx}`;
 
-        if (soloGroupIdx === gIdx) soloGroupIdx = nextGIdx;
-        else if (soloGroupIdx === nextGIdx) soloGroupIdx = gIdx;
+        if (soloGroupIdx === gIdx) {soloGroupIdx = nextGIdx;}
+        else if (soloGroupIdx === nextGIdx) {soloGroupIdx = gIdx;}
     }
     updateJsonPanel();
     renderTable();
@@ -736,7 +739,7 @@ window.addEventListener("keydown", (e) => {
         e.target.tagName.toLowerCase() === "textarea" ||
         e.target.tagName.toLowerCase() === "select"
     )
-        return;
+        {return;}
     const isCtrl = e.ctrlKey || e.metaKey;
 
     if (isCtrl && !e.shiftKey && e.key.toLowerCase() === "z") {
@@ -772,7 +775,7 @@ window.addEventListener("keydown", (e) => {
 
     if (isCtrl && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        if (appMode === "select") selectAllRows();
+        if (appMode === "select") {selectAllRows();}
         return;
     }
 
@@ -818,7 +821,7 @@ window.addEventListener("keydown", (e) => {
                 (tr) =>
                     (tr.dataset.path || tr.dataset.groupPath) === activePath,
             );
-            let nextIdx = e.key === "ArrowUp" ? currentIdx - 1 : currentIdx + 1;
+            const nextIdx = e.key === "ArrowUp" ? currentIdx - 1 : currentIdx + 1;
             if (nextIdx >= 0 && nextIdx < allRows.length) {
                 setActivePath(
                     allRows[nextIdx].dataset.path ||
@@ -829,46 +832,46 @@ window.addEventListener("keydown", (e) => {
         }
         if (isCtrl && e.key.toLowerCase() === "d") {
             e.preventDefault();
-            if (selectedPaths.size > 0) duplicateSelected();
+            if (selectedPaths.size > 0) {duplicateSelected();}
             else if (activePath) {
-                if (activePath.includes("-")) duplicateRow(activePath);
-                else duplicateGroup(parseInt(activePath));
+                if (activePath.includes("-")) {duplicateRow(activePath);}
+                else {duplicateGroup(parseInt(activePath));}
             }
             return;
         }
         if (isCtrl && e.key.toLowerCase() === "m") {
             e.preventDefault();
-            if (selectedPaths.size > 0) mirrorSelected();
+            if (selectedPaths.size > 0) {mirrorSelected();}
             else if (activePath && activePath.includes("-"))
-                mirrorPattern(activePath);
+                {mirrorPattern(activePath);}
             return;
         }
         if (isCtrl && e.key.toLowerCase() === "i") {
             e.preventDefault();
-            if (selectedPaths.size > 0) invertSelected();
+            if (selectedPaths.size > 0) {invertSelected();}
             else if (activePath) {
-                if (activePath.includes("-")) invertRow(activePath);
-                else invertGroup(parseInt(activePath));
+                if (activePath.includes("-")) {invertRow(activePath);}
+                else {invertGroup(parseInt(activePath));}
             }
             return;
         }
         if (e.key === "Delete") {
-            if (selectedPaths.size > 0) deleteSelected();
-            else if (activePath) removePattern(activePath);
+            if (selectedPaths.size > 0) {deleteSelected();}
+            else if (activePath) {removePattern(activePath);}
             return;
         }
     }
 
-    if (!isCtrl && e.key.toLowerCase() === "e") setAppMode("edit");
-    if (!isCtrl && e.key.toLowerCase() === "s") setAppMode("select");
-    if (!isCtrl && e.key.toLowerCase() === "a") addPattern();
+    if (!isCtrl && e.key.toLowerCase() === "e") {setAppMode("edit");}
+    if (!isCtrl && e.key.toLowerCase() === "s") {setAppMode("select");}
+    if (!isCtrl && e.key.toLowerCase() === "a") {addPattern();}
     if (isCtrl && e.key.toLowerCase() === "s") {
         e.preventDefault();
         downloadConfig();
     }
     if (isCtrl && e.key.toLowerCase() === "r") {
         e.preventDefault();
-        if (appMode === "select") reverseSelectedOrder();
+        if (appMode === "select") {reverseSelectedOrder();}
     }
     if (isCtrl && e.key.toLowerCase() === "t") {
         e.preventDefault();
@@ -876,33 +879,33 @@ window.addEventListener("keydown", (e) => {
     }
     if (isCtrl && e.key.toLowerCase() === "g") {
         e.preventDefault();
-        if (appMode === "select") groupSelectedItems();
+        if (appMode === "select") {groupSelectedItems();}
     }
     if (isCtrl && e.shiftKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (activePath) {
-            let parts = activePath.split("-");
-            let gIdx = parseInt(parts[0]);
+            const parts = activePath.split("-");
+            const gIdx = parseInt(parts[0]);
             if (config.patterns[gIdx] && config.patterns[gIdx].type === "group")
-                ungroup(gIdx);
+                {ungroup(gIdx);}
         }
     }
     if (e.key === "Escape") {
         if (document.getElementById("help-modal").style.display === "flex")
-            toggleHelp();
+            {toggleHelp();}
         else if (document.getElementById("json-modal").style.display === "flex")
-            toggleJsonModal();
+            {toggleJsonModal();}
         else if (
             document.getElementById("preferences-modal").style.display ===
             "flex"
         )
-            togglePreferencesModal();
+            {togglePreferencesModal();}
         else if (
             document.getElementById("project-settings-modal").style.display ===
             "flex"
         )
-            toggleProjectSettingsModal();
-        else if (appMode === "select") clearSelection();
+            {toggleProjectSettingsModal();}
+        else if (appMode === "select") {clearSelection();}
     }
 });
 
@@ -911,7 +914,7 @@ window.addEventListener("keydown", (e) => {
 // Opening a .json config file from disk.
 // ==========================================================================
 function handleFileInput(event) {
-    if (event.target.files.length > 0) loadJsonFile(event.target.files[0]);
+    if (event.target.files.length > 0) {loadJsonFile(event.target.files[0]);}
     event.target.value = "";
 }
 
@@ -939,7 +942,7 @@ function loadJsonFile(file) {
                 syncPinsMappingLength();
                 config = migrateConfigToPWM(config);
                 if (!config._strobe_editor_version)
-                    config._strobe_editor_version = "1";
+                    {config._strobe_editor_version = "1";}
                 syncCanvasLayoutLength();
                 document.getElementById("light-bar").innerHTML = "";
                 document.getElementById("custom-layout-view").innerHTML = "";
@@ -959,7 +962,7 @@ function loadJsonFile(file) {
                 renderTable();
                 renderInspector();
                 showToast("Config loaded successfully", "success");
-            } else showToast("Invalid config format", "warn");
+            } else {showToast("Invalid config format", "warn");}
         } catch (err) {
             showToast("Failed to parse JSON", "warn");
         }
@@ -981,7 +984,7 @@ function newProject() {
         const confirmed = confirm(
             "Start a new project? Any unsaved changes to the current project will be lost.",
         );
-        if (!confirmed) return;
+        if (!confirmed) {return;}
     }
 
     config = getDefaultConfig();
@@ -1026,7 +1029,7 @@ document.addEventListener("drop", (e) => {
     ) {
         e.preventDefault();
         if (e.dataTransfer.files.length > 0)
-            loadJsonFile(e.dataTransfer.files[0]);
+            {loadJsonFile(e.dataTransfer.files[0]);}
     }
 });
 
@@ -1088,8 +1091,8 @@ function toggleProjectSettingsModal() {
     }
 }
 function updateBrushIncrementSetting(val) {
-    let parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed <= 0) return;
+    const parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed <= 0) {return;}
     brushIncrement = Math.round(Math.min(1023, Math.max(1, parsed)));
     // Save to localStorage
     localStorage.setItem("strobe_brush_increment", brushIncrement);
@@ -1100,8 +1103,8 @@ function updatePwmRange() {
     const maxInput = document.getElementById("settings-pwm-max");
     let newMin = parseInt(minInput.value);
     let newMax = parseInt(maxInput.value);
-    if (isNaN(newMin) || newMin < 0) newMin = 0;
-    if (isNaN(newMax) || newMax > 1023) newMax = 1023;
+    if (isNaN(newMin) || newMin < 0) {newMin = 0;}
+    if (isNaN(newMax) || newMax > 1023) {newMax = 1023;}
     if (newMin >= newMax) {
         showToast("Minimum must be less than maximum", "warn");
         return;
@@ -1112,9 +1115,9 @@ function updatePwmRange() {
     clampStateValues();
     // Clamp brush brightness
     if (brushBrightness < config.properties.pwm.min)
-        brushBrightness = config.properties.pwm.min;
+        {brushBrightness = config.properties.pwm.min;}
     if (brushBrightness > config.properties.pwm.max)
-        brushBrightness = config.properties.pwm.max;
+        {brushBrightness = config.properties.pwm.max;}
     syncBrushWidgetStyles();
     // Update inspector sliders
     renderInspector();
@@ -1122,7 +1125,7 @@ function updatePwmRange() {
     renderTable();
     if (!isPlaying) {
         if (activePath) {
-            let currP = getObjByPath(activePath);
+            const currP = getObjByPath(activePath);
             if (currP && currP.state) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(currP.state, 0, bgDim);
@@ -1148,7 +1151,7 @@ function toggleIndicatorOffAtMin() {
     // Re-render preview
     if (!isPlaying) {
         if (activePath) {
-            let currP = getObjByPath(activePath);
+            const currP = getObjByPath(activePath);
             if (currP && currP.state) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(currP.state, 0, bgDim);
@@ -1171,15 +1174,15 @@ function toggleIndicatorOffAtMin() {
 
 function updateBackgroundDimPWM(val) {
     let parsed = parseInt(val);
-    if (isNaN(parsed) || parsed < 0) parsed = 0;
+    if (isNaN(parsed) || parsed < 0) {parsed = 0;}
     if (parsed > (config.properties.pwm.max || DEFAULT_PWM_MAX))
-        parsed = config.properties.pwm.max || DEFAULT_PWM_MAX;
+        {parsed = config.properties.pwm.max || DEFAULT_PWM_MAX;}
     config.properties.backgroundDim.pwm = parsed;
     updateJsonPanel();
     // Update preview if active pattern
     if (!isPlaying) {
         if (activePath) {
-            let currP = getObjByPath(activePath);
+            const currP = getObjByPath(activePath);
             if (currP && currP.state) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(currP.state, 0, bgDim);
@@ -1201,7 +1204,7 @@ function updateBackgroundDimPWM(val) {
 
 function updateBackgroundDimPreview() {
     const previewContainer = document.getElementById("bg-dim-preview");
-    if (!previewContainer) return;
+    if (!previewContainer) {return;}
     const bgPWM = config.properties.backgroundDim.pwm || 0;
     const maxPWM = config.properties.pwm.max || DEFAULT_PWM_MAX;
     const minPWM = config.properties.pwm.min || DEFAULT_PWM_MIN;
@@ -1245,7 +1248,7 @@ function updateBackgroundDimPreview() {
 // INDICATOR COLOR MODE CONTROLS (Settings)
 // ==========================================================================
 function setColorMode(mode) {
-    if (mode === config.properties.indicator.mode) return;
+    if (mode === config.properties.indicator.mode) {return;}
     if (mode === "global") {
         // Switch to global: use the first channel's color (or most common if all same)
         const colors = config.properties.indicator.channelColors;
@@ -1270,7 +1273,7 @@ function setColorMode(mode) {
 
 function updateColorModeControls() {
     const container = document.getElementById("color-mode-controls");
-    if (!container) return;
+    if (!container) {return;}
     const mode = config.properties.indicator.mode;
     let html = "";
 
@@ -1384,7 +1387,7 @@ function createColorSwatchPickerHTML(currentColor, slotId) {
         "#e17100",
         "#ffffff",
     ];
-    let swatchesHtml = presets
+    const swatchesHtml = presets
         .map(
             (c) => `
         <div class="swatch" data-color="${c}" style="
@@ -1437,7 +1440,7 @@ function refreshAll() {
     renderInspector();
     if (!isPlaying) {
         if (activePath) {
-            let currP = getObjByPath(activePath);
+            const currP = getObjByPath(activePath);
             if (currP && currP.state) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(currP.state, 0, bgDim);
@@ -1457,7 +1460,7 @@ function refreshAll() {
 
 document.addEventListener("click", () => {
     const pop = document.getElementById("brush-presets-popup");
-    if (pop) pop.style.display = "none";
+    if (pop) {pop.style.display = "none";}
 });
 
 // ==========================================================================
@@ -1515,7 +1518,7 @@ function setAppMode(mode) {
     }
     renderTable();
     renderInspector();
-    if (mode === "select") updateSelectionUndoButton();
+    if (mode === "select") {updateSelectionUndoButton();}
 }
 
 function toggleStepIndicator() {
@@ -1527,11 +1530,11 @@ function toggleStepIndicator() {
 
 function syncStepUI() {
     const container = document.getElementById("editor-container");
-    if (showSteps) container.classList.add("show-steps");
-    else container.classList.remove("show-steps");
+    if (showSteps) {container.classList.add("show-steps");}
+    else {container.classList.remove("show-steps");}
 
     const checkbox = document.getElementById("settings-show-steps");
-    if (checkbox) checkbox.checked = showSteps;
+    if (checkbox) {checkbox.checked = showSteps;}
 }
 
 window.onmouseup = () => {
@@ -1545,25 +1548,25 @@ window.onmouseup = () => {
 // (pattern 1 inside group 2). These helpers resolve a path to real data.
 // ==========================================================================
 function getObjByPath(path) {
-    let [gIdx, pIdx] = path.split("-");
+    const [gIdx, pIdx] = path.split("-");
     return pIdx === undefined
         ? config.patterns[gIdx]
         : config.patterns[gIdx].patterns[pIdx];
 }
 function getArrByPath(path) {
-    let [gIdx, pIdx] = path.split("-");
+    const [gIdx, pIdx] = path.split("-");
     return pIdx === undefined
         ? config.patterns
         : config.patterns[gIdx].patterns;
 }
 function getIdxByPath(path) {
-    let parts = path.split("-");
+    const parts = path.split("-");
     return parseInt(parts[parts.length - 1]);
 }
 
 function getBackgroundDimForPath(path) {
-    if (!path) return false;
-    let p = getObjByPath(path);
+    if (!path) {return false;}
+    const p = getObjByPath(path);
     return p && p.backgroundDim ? true : false;
 }
 
@@ -1572,16 +1575,16 @@ function getBackgroundDimForPath(path) {
 // Select all / clear / group / ungroup multiple rows at once.
 // ==========================================================================
 function selectAllRows() {
-    if (appMode !== "select") return;
+    if (appMode !== "select") {return;}
     saveSelectionState();
     inspectorBuffer = null;
     dirtyFields.clear();
     config.patterns.forEach((item, gIdx) => {
         if (item.type === "group")
-            item.patterns.forEach((_, pIdx) =>
+            {item.patterns.forEach((_, pIdx) =>
                 selectedPaths.add(`${gIdx}-${pIdx}`),
-            );
-        else selectedPaths.add(`${gIdx}`);
+            );}
+        else {selectedPaths.add(`${gIdx}`);}
     });
     renderTableSelection();
 }
@@ -1595,16 +1598,16 @@ function clearSelection() {
 }
 
 function groupSelectedItems() {
-    let rootIndices = Array.from(selectedPaths)
+    const rootIndices = Array.from(selectedPaths)
         .filter((p) => !p.includes("-"))
         .map(Number)
         .sort((a, b) => a - b);
-    if (rootIndices.length < 1) return;
-    let group = { type: "group", repeat: 2, patterns: [], bounce: false };
+    if (rootIndices.length < 1) {return;}
+    const group = { type: "group", repeat: 2, patterns: [], bounce: false };
     for (let i = rootIndices.length - 1; i >= 0; i--) {
-        let item = config.patterns.splice(rootIndices[i], 1)[0];
-        if (item.type === "group") group.patterns.unshift(...item.patterns);
-        else group.patterns.unshift(item);
+        const item = config.patterns.splice(rootIndices[i], 1)[0];
+        if (item.type === "group") {group.patterns.unshift(...item.patterns);}
+        else {group.patterns.unshift(item);}
     }
     config.patterns.splice(rootIndices[0], 0, group);
     selectedPaths.clear();
@@ -1616,9 +1619,9 @@ function groupSelectedItems() {
     showToast("Group created");
 }
 function ungroup(gIdx) {
-    let group = config.patterns[gIdx];
+    const group = config.patterns[gIdx];
     config.patterns.splice(gIdx, 1, ...group.patterns);
-    if (soloGroupIdx === gIdx) soloGroupIdx = null;
+    if (soloGroupIdx === gIdx) {soloGroupIdx = null;}
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
@@ -1632,30 +1635,30 @@ function ungroup(gIdx) {
 // Changing how many strobe channels the config has.
 // ==========================================================================
 function updateGlobalChannels(val) {
-    let n = parseInt(val) || 1;
+    const n = parseInt(val) || 1;
     config.channels = n;
     syncPinsMappingLength();
 
     // adjust indicatorColors
     if (!config.properties.indicator.channelColors)
-        config.properties.indicator.channelColors = [];
+        {config.properties.indicator.channelColors = [];}
     while (config.properties.indicator.channelColors.length < n)
-        config.properties.indicator.channelColors.push(default_color);
+        {config.properties.indicator.channelColors.push(default_color);}
     if (config.properties.indicator.channelColors.length > n)
-        config.properties.indicator.channelColors =
-            config.properties.indicator.channelColors.slice(0, n);
+        {config.properties.indicator.channelColors =
+            config.properties.indicator.channelColors.slice(0, n);}
     // if global mode, ensure indicatorColor exists
     if (!config.properties.indicator.globalColor)
-        config.properties.indicator.globalColor = default_color;
+        {config.properties.indicator.globalColor = default_color;}
 
     syncCanvasLayoutLength();
     const fixLength = (p) => {
-        while (p.state.length < n) p.state.push(0);
-        if (p.state.length > n) p.state = p.state.slice(0, n);
+        while (p.state.length < n) {p.state.push(0);}
+        if (p.state.length > n) {p.state = p.state.slice(0, n);}
     };
     config.patterns.forEach((item) => {
-        if (item.type === "group") item.patterns.forEach(fixLength);
-        else fixLength(item);
+        if (item.type === "group") {item.patterns.forEach(fixLength);}
+        else {fixLength(item);}
     });
     document.getElementById("light-bar").innerHTML = "";
     document.getElementById("custom-layout-view").innerHTML = "";
@@ -1688,9 +1691,9 @@ function setActiveTool(tool) {
     paintBtn.className = "btn-compact";
     eraseBtn.className = "btn-compact";
 
-    if (tool === "hybrid") hybridBtn.classList.add("active-hybrid");
-    if (tool === "paint") paintBtn.classList.add("active-paint");
-    if (tool === "erase") eraseBtn.classList.add("active-erase");
+    if (tool === "hybrid") {hybridBtn.classList.add("active-hybrid");}
+    if (tool === "paint") {paintBtn.classList.add("active-paint");}
+    if (tool === "erase") {eraseBtn.classList.add("active-erase");}
 
     const opacityVal = tool === "erase" ? "0.3" : "1";
     document.getElementById("paint-tool-scroll-box").style.opacity = opacityVal;
@@ -1715,21 +1718,21 @@ function syncBrushWidgetStyles() {
 }
 
 function handleBrushWidgetWheel(event) {
-    if (activeTool === "erase") return;
+    if (activeTool === "erase") {return;}
     event.preventDefault();
-    let step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
+    const step = event.deltaY < 0 ? brushIncrement : -brushIncrement;
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    let next = Math.min(max, Math.max(min, brushBrightness + step));
+    const next = Math.min(max, Math.max(min, brushBrightness + step));
     brushBrightness = Math.round(next);
     syncBrushWidgetStyles();
     renderInspector();
 }
 
 function handleManualBrushInput(val) {
-    if (activeTool === "erase") return;
-    let parsed = parseFloat(val);
-    if (isNaN(parsed)) return;
+    if (activeTool === "erase") {return;}
+    const parsed = parseFloat(val);
+    if (isNaN(parsed)) {return;}
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     brushBrightness = Math.round(Math.min(max, Math.max(min, parsed)));
@@ -1738,7 +1741,7 @@ function handleManualBrushInput(val) {
 }
 
 function toggleBrushPresetsMenu(e) {
-    if (activeTool === "erase") return;
+    if (activeTool === "erase") {return;}
     e.stopPropagation();
     const pop = document.getElementById("brush-presets-popup");
     // Populate presets based on current min/max
@@ -1770,14 +1773,14 @@ function selectBrushPreset(val) {
 
 // Grid Painting Drag Action Modules
 function startPaintStrokeDrag(path, si) {
-    if (appMode !== "edit") return;
+    if (appMode !== "edit") {return;}
     isPaintingActive = true;
     nodesToggledInCurrentStroke.clear();
     paintTargetCellNode(path, si);
 }
 
 function enterPaintStrokeDrag(path, si) {
-    if (!isPaintingActive || appMode !== "edit") return;
+    if (!isPaintingActive || appMode !== "edit") {return;}
     paintTargetCellNode(path, si);
 }
 
@@ -1790,18 +1793,18 @@ function globallyReleasePaintStroke() {
 
 function paintTargetCellNode(path, si) {
     const nodeKey = `${path}-${si}`;
-    if (nodesToggledInCurrentStroke.has(nodeKey)) return;
+    if (nodesToggledInCurrentStroke.has(nodeKey)) {return;}
 
     nodesToggledInCurrentStroke.add(nodeKey);
-    let p = getObjByPath(path);
-    if (!p) return;
+    const p = getObjByPath(path);
+    if (!p) {return;}
 
     if (activeTool === "paint") {
         p.state[si] = brushBrightness;
     } else if (activeTool === "erase") {
         p.state[si] = config.properties.pwm.min || DEFAULT_PWM_MIN;
     } else if (activeTool === "hybrid") {
-        let current = Math.round(parseFloat(p.state[si]) || 0);
+        const current = Math.round(parseFloat(p.state[si]) || 0);
         const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
         const isOn = config.properties.pwm.indicatorOffAtMin
             ? current > min
@@ -1831,11 +1834,11 @@ function paintTargetCellNode(path, si) {
 
         if (si === activeInspectorChannel) {
             if (rangeInput && rangeInput !== document.activeElement)
-                rangeInput.value = p.state[si];
+                {rangeInput.value = p.state[si];}
             if (numberInput && numberInput !== document.activeElement)
-                numberInput.value = p.state[si];
+                {numberInput.value = p.state[si];}
             if (labelNode)
-                labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${p.state[si]})</span>`;
+                {labelNode.innerHTML = `Ch ${si + 1} Level: <span>(${p.state[si]})</span>`;}
         }
         if (blockNode) {
             blockNode.title = `${p.state[si]}`;
@@ -1865,21 +1868,21 @@ function shiftSelected(dir) {
 }
 
 function applyInspectorToSelection() {
-    let hasStateChanges =
+    const hasStateChanges =
         inspectorBuffer && inspectorBuffer.state.some((s) => s !== -1);
     if (
         !inspectorBuffer ||
         selectedPaths.size === 0 ||
         (dirtyFields.size === 0 && !hasStateChanges)
     )
-        return;
+        {return;}
 
     selectedPaths.forEach((path) => {
         let p = getObjByPath(path);
         if (p && p.type !== "group") {
-            if (!p.phases) p = migratePattern(p);
+            if (!p.phases) {p = migratePattern(p);}
             dirtyFields.forEach((fieldPath) => {
-                let [phaseName, fieldKey] = fieldPath.split(".");
+                const [phaseName, fieldKey] = fieldPath.split(".");
                 if (p.phases[phaseName]) {
                     p.phases[phaseName][fieldKey] =
                         inspectorBuffer.phases[phaseName][fieldKey];
@@ -1905,34 +1908,34 @@ function applyInspectorToSelection() {
 // Building the HTML for the main pattern table.
 // ==========================================================================
 function getTimelineSummary(p) {
-    if (!p.phases) return "-";
-    let parts = [];
+    if (!p.phases) {return "-";}
+    const parts = [];
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     if (p.phases.in && p.phases.in.type !== "none")
-        parts.push(
+        {parts.push(
             `<span style="color:#a5d6ff; font-weight:bold;">In:</span> ${cap(p.phases.in.type)} (${p.phases.in.duration}ms)`,
-        );
+        );}
     if (p.phases.anim && p.phases.anim.type !== "none") {
-        let amt = p.phases.anim.amount ? `x${p.phases.anim.amount}` : "";
+        const amt = p.phases.anim.amount ? `x${p.phases.anim.amount}` : "";
         parts.push(
             `<span style="color:#ffc107; font-weight:bold;">Anim:</span> ${cap(p.phases.anim.type)} ${amt} (${p.phases.anim.duration}ms)`,
         );
     }
     if (p.phases.out && p.phases.out.type !== "none")
-        parts.push(
+        {parts.push(
             `<span style="color:#28a745; font-weight:bold;">Out:</span> ${cap(p.phases.out.type)} (${p.phases.out.duration}ms)`,
-        );
+        );}
     return parts.join("<br>") || "None";
 }
 
 function createPatternRowHTML(p, path, isChild = false) {
-    if (!p.phases) p = migratePattern(p);
+    if (!p.phases) {p = migratePattern(p);}
     const tr = document.createElement("tr");
     tr.dataset.path = path;
-    if (isChild) tr.className = "group-child";
-    if (selectedPaths.has(path)) tr.classList.add("selected");
+    if (isChild) {tr.className = "group-child";}
+    if (selectedPaths.has(path)) {tr.classList.add("selected");}
     if (activePath === path && appMode === "edit")
-        tr.classList.add("active-row");
+        {tr.classList.add("active-row");}
 
     tr.onmousedown = (e) => {
         if (
@@ -1993,7 +1996,7 @@ function createPatternRowHTML(p, path, isChild = false) {
     const handle = tr.querySelector(".drag-handle");
     handle.onmouseenter = () => (tr.draggable = true);
     handle.onmouseleave = () => {
-        if (!tr.classList.contains("dragging")) tr.draggable = false;
+        if (!tr.classList.contains("dragging")) {tr.draggable = false;}
     };
     tr.onmouseup = () => {
         tr.draggable = false;
@@ -2001,8 +2004,8 @@ function createPatternRowHTML(p, path, isChild = false) {
     };
     tr.onmouseenter = () => {
         if (isDraggingSelection && appMode === "select" && dragTargetState) {
-            if (dragTargetState === "select") selectedPaths.add(path);
-            else selectedPaths.delete(path);
+            if (dragTargetState === "select") {selectedPaths.add(path);}
+            else {selectedPaths.delete(path);}
             renderTableSelection();
         }
     };
@@ -2034,8 +2037,8 @@ function renderTable(skipInspector = false) {
             gTr.className = "group-header";
             gTr.dataset.groupPath = `${gIdx}`;
             if (activePath === `${gIdx}` && appMode === "edit")
-                gTr.classList.add("active-row");
-            if (soloGroupIdx === gIdx) gTr.classList.add("solo-active");
+                {gTr.classList.add("active-row");}
+            if (soloGroupIdx === gIdx) {gTr.classList.add("solo-active");}
 
             gTr.onmousedown = (e) => {
                 if (
@@ -2073,7 +2076,7 @@ function renderTable(skipInspector = false) {
             const handle = gTr.querySelector(".drag-handle");
             handle.onmouseenter = () => (gTr.draggable = true);
             handle.onmouseleave = () => {
-                if (!gTr.classList.contains("dragging")) gTr.draggable = false;
+                if (!gTr.classList.contains("dragging")) {gTr.draggable = false;}
             };
             gTr.onmouseup = () => {
                 gTr.draggable = false;
@@ -2101,7 +2104,7 @@ function renderTable(skipInspector = false) {
                     createPatternRowHTML(child, `${gIdx}-${pIdx}`, true),
                 ),
             );
-        } else list.appendChild(createPatternRowHTML(item, `${gIdx}`, false));
+        } else {list.appendChild(createPatternRowHTML(item, `${gIdx}`, false));}
     });
     renderTableSelection(skipInspector);
     updateJsonPanel();
@@ -2109,14 +2112,14 @@ function renderTable(skipInspector = false) {
 
 function toggleGroupSelection(gIdx) {
     const group = config.patterns[gIdx];
-    if (!group || group.type !== "group") return;
+    if (!group || group.type !== "group") {return;}
     saveSelectionState();
     const allSelected = group.patterns.every((_, pIdx) =>
         selectedPaths.has(`${gIdx}-${pIdx}`),
     );
     group.patterns.forEach((_, pIdx) => {
-        if (allSelected) selectedPaths.delete(`${gIdx}-${pIdx}`);
-        else selectedPaths.add(`${gIdx}-${pIdx}`);
+        if (allSelected) {selectedPaths.delete(`${gIdx}-${pIdx}`);}
+        else {selectedPaths.add(`${gIdx}-${pIdx}`);}
     });
     renderTableSelection();
 }
@@ -2130,13 +2133,13 @@ function selectInspectorChannel(si) {
     renderInspector();
     if (previewMode === "custom") {
         const numEl = document.getElementById("shape-control-ch-num");
-        if (numEl) numEl.innerText = si !== -1 ? si + 1 : "-";
+        if (numEl) {numEl.innerText = si !== -1 ? si + 1 : "-";}
         const selectEl = document.getElementById("canvas-item-shape");
         if (selectEl && si !== -1 && canvasLayoutData[si])
-            selectEl.value = canvasLayoutData[si].shape;
+            {selectEl.value = canvasLayoutData[si].shape;}
 
         if (activePath) {
-            let currP = getObjByPath(activePath);
+            const currP = getObjByPath(activePath);
             if (currP && currP.state) {
                 const bgDim = getBackgroundDimForPath(activePath);
                 renderLights(currP.state, 0, bgDim);
@@ -2154,19 +2157,19 @@ function selectInspectorChannel(si) {
 }
 
 function updateInspectorChannelVolume(si, val) {
-    if (si === -1) return;
+    if (si === -1) {return;}
     let num = parseFloat(val);
-    if (isNaN(num)) num = 0;
+    if (isNaN(num)) {num = 0;}
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    if (num < min) num = min;
-    if (num > max) num = max;
+    if (num < min) {num = min;}
+    if (num > max) {num = max;}
     num = Math.round(num);
 
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
             let p = getObjByPath(activePath);
-            if (!p.phases) p = migratePattern(p);
+            if (!p.phases) {p = migratePattern(p);}
             inspectorBuffer = {
                 phases: JSON.parse(JSON.stringify(p.phases)),
                 state: new Array(config.channels).fill(-1),
@@ -2181,7 +2184,7 @@ function updateInspectorChannelVolume(si, val) {
                 "width: 100%; justify-content: center; background: var(--success);";
         }
     } else {
-        let p = getObjByPath(activePath);
+        const p = getObjByPath(activePath);
         if (p) {
             p.state[si] = num;
             renderTable(true);
@@ -2248,8 +2251,8 @@ function toggleBackgroundDim(target = null) {
         return;
     }
     // Otherwise, toggle on the given pattern (path)
-    let p = getObjByPath(target);
-    if (!p || p.type === "group") return;
+    const p = getObjByPath(target);
+    if (!p || p.type === "group") {return;}
     p.backgroundDim = !p.backgroundDim;
     updateJsonPanel();
     renderTable();
@@ -2266,14 +2269,14 @@ function updateDefaultPhase(phase, key, value, refreshInspector = false) {
     if (key === "type") {
         dp.phases[phase].type = value;
         if (value !== "none" && !dp.phases[phase].duration)
-            dp.phases[phase].duration = 500;
+            {dp.phases[phase].duration = 500;}
         if (value === "flicker" && !dp.phases[phase].amount)
-            dp.phases[phase].amount = 3;
+            {dp.phases[phase].amount = 3;}
     } else {
         dp.phases[phase][key] = parseInt(value) || 0;
     }
     updateJsonPanel();
-    if (refreshInspector) renderInspector();
+    if (refreshInspector) {renderInspector();}
 }
 
 // Helper to render the default pattern inspector (when no pattern selected)
@@ -2281,11 +2284,11 @@ function renderDefaultInspector() {
     const container = document.getElementById("inspector-content");
     const dp = config.defaultPattern;
 
-    let effectiveInType = dp.phases.in.type;
-    let effectiveAnimType = dp.phases.anim.type;
-    let effectiveOutType = dp.phases.out.type;
+    const effectiveInType = dp.phases.in.type;
+    const effectiveAnimType = dp.phases.anim.type;
+    const effectiveOutType = dp.phases.out.type;
 
-    let bgDimHtml = `
+    const bgDimHtml = `
                 <div class="inspector-section" style="margin-top: 12px;">
                     <div class="inspector-label">Background Dim</div>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #ccc; cursor: pointer;">
@@ -2375,7 +2378,7 @@ function renderInspector() {
 
     // If active path is a group, show group properties
     if (!activePath.includes("-")) {
-        let p = config.patterns[parseInt(activePath)];
+        const p = config.patterns[parseInt(activePath)];
         if (p && p.type === "group") {
             container.innerHTML = `
                         <div class="inspector-section">
@@ -2398,8 +2401,8 @@ function renderInspector() {
 
     // Otherwise, it's a pattern (not a group)
     let p = getObjByPath(activePath);
-    if (!p) return;
-    if (!p.phases) p = migratePattern(p);
+    if (!p) {return;}
+    if (!p.phases) {p = migratePattern(p);}
 
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
@@ -2412,18 +2415,18 @@ function renderInspector() {
         inspectorBuffer = null;
     }
 
-    let currentPhases =
+    const currentPhases =
         selectedPaths.size > 0 ? inspectorBuffer.phases : p.phases;
 
-    let effectiveInType =
+    const effectiveInType =
         selectedPaths.size > 0 && !dirtyFields.has("in.type")
             ? p.phases.in.type
             : currentPhases.in.type;
-    let effectiveAnimType =
+    const effectiveAnimType =
         selectedPaths.size > 0 && !dirtyFields.has("anim.type")
             ? p.phases.anim.type
             : currentPhases.anim.type;
-    let effectiveOutType =
+    const effectiveOutType =
         selectedPaths.size > 0 && !dirtyFields.has("out.type")
             ? p.phases.out.type
             : currentPhases.out.type;
@@ -2479,8 +2482,8 @@ function renderInspector() {
             .join("");
     }
 
-    let displayVal = currentChVal === -1 ? 0 : currentChVal;
-    let sliderLabelExtra =
+    const displayVal = currentChVal === -1 ? 0 : currentChVal;
+    const sliderLabelExtra =
         activeInspectorChannel === -1
             ? ' <span style="color:#777; font-style:italic;">(None Selected)</span>'
             : currentChVal === -1
@@ -2499,7 +2502,7 @@ function renderInspector() {
     const min = config.properties.pwm.min || DEFAULT_PWM_MIN;
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
 
-    let dimmerControlHtml = `
+    const dimmerControlHtml = `
                 <div style="margin-top: 14px; background: #222; padding: 10px; border-radius: 4px; border: 1px solid #333;">
                     <div style="display:flex; align-items:center; margin-bottom: 6px;">
                         <span id="inspector-dimmer-label" style="font-size:11px; color:#aaa; font-weight:bold;">Ch ${activeInspectorChannel !== -1 ? activeInspectorChannel + 1 : "-"} Level:${sliderLabelExtra}</span>
@@ -2530,11 +2533,11 @@ function renderInspector() {
             `;
     }
 
-    let hasStateChanges =
+    const hasStateChanges =
         selectedPaths.size > 0 &&
         inspectorBuffer &&
         inspectorBuffer.state.some((s) => s !== -1);
-    let canApply = dirtyFields.size > 0 || hasStateChanges;
+    const canApply = dirtyFields.size > 0 || hasStateChanges;
 
     let applyAllButtonHtml = "";
     if (selectedPaths.size > 0) {
@@ -2628,7 +2631,7 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
     if (selectedPaths.size > 0) {
         if (!inspectorBuffer) {
             let p = getObjByPath(path);
-            if (!p.phases) p = migratePattern(p);
+            if (!p.phases) {p = migratePattern(p);}
             inspectorBuffer = {
                 phases: JSON.parse(JSON.stringify(p.phases)),
                 state: new Array(config.channels).fill(-1),
@@ -2655,9 +2658,9 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
             inspectorBuffer.phases[phase][key] = parseInt(value) || 0;
             dirtyFields.add(`${phase}.${key}`);
         }
-        if (refreshInspector) renderInspector();
+        if (refreshInspector) {renderInspector();}
         else {
-            let hasStateChanges = inspectorBuffer.state.some((s) => s !== -1);
+            const hasStateChanges = inspectorBuffer.state.some((s) => s !== -1);
             if (dirtyFields.size > 0 || hasStateChanges) {
                 const applyBtn = document.getElementById("btn-apply-selection");
                 if (applyBtn) {
@@ -2671,35 +2674,35 @@ function updatePhase(path, phase, key, value, refreshInspector = false) {
     }
 
     let p = getObjByPath(path);
-    if (!p.phases) p = migratePattern(p);
+    if (!p.phases) {p = migratePattern(p);}
     if (key === "type") {
         p.phases[phase].type = value;
         if (value !== "none" && !p.phases[phase].duration)
-            p.phases[phase].duration = 500;
+            {p.phases[phase].duration = 500;}
         if (value === "flicker" && !p.phases[phase].amount)
-            p.phases[phase].amount = 3;
+            {p.phases[phase].amount = 3;}
     } else {
         p.phases[phase][key] = parseInt(value) || 0;
     }
 
     updateJsonPanel();
     renderTable();
-    if (refreshInspector) renderInspector();
+    if (refreshInspector) {renderInspector();}
 }
 
 function updateGroupVal(path, key, val, refresh = false) {
-    let p = config.patterns[parseInt(path)];
-    if (key === "repeat") p.repeat = parseInt(val) || 1;
-    if (key === "bounce") p.bounce = !!val;
+    const p = config.patterns[parseInt(path)];
+    if (key === "repeat") {p.repeat = parseInt(val) || 1;}
+    if (key === "bounce") {p.bounce = !!val;}
     updateJsonPanel();
-    if (refresh) renderInspector();
+    if (refresh) {renderInspector();}
 }
 
 function renderTableSelection(skipInspector = false) {
     const count = selectedPaths.size;
     document.querySelectorAll("#pattern-list tr").forEach((tr) => {
         if (tr.dataset.path)
-            tr.classList.toggle("selected", selectedPaths.has(tr.dataset.path));
+            {tr.classList.toggle("selected", selectedPaths.has(tr.dataset.path));}
     });
     document.getElementById("del-count-text").innerText =
         count > 0 ? `(${count})` : "";
@@ -2717,9 +2720,9 @@ function renderTableSelection(skipInspector = false) {
         "sel-even",
     ].forEach((id) => {
         const el = document.getElementById(id);
-        if (el) el.disabled = count === 0;
+        if (el) {el.disabled = count === 0;}
     });
-    if (!skipInspector) renderInspector();
+    if (!skipInspector) {renderInspector();}
 }
 
 // ==========================================================================
@@ -2727,8 +2730,8 @@ function renderTableSelection(skipInspector = false) {
 // Runs the configured pattern in real time and drives the live preview.
 // ==========================================================================
 function togglePlayback() {
-    if (isPlaying) stopStrobe();
-    else playStrobe();
+    if (isPlaying) {stopStrobe();}
+    else {playStrobe();}
 }
 
 function highlightPlayingRow(path) {
@@ -2739,12 +2742,12 @@ function highlightPlayingRow(path) {
         const tr = document.querySelector(
             `#pattern-list tr[data-path='${path}']`,
         );
-        if (tr) tr.classList.add("playing");
+        if (tr) {tr.classList.add("playing");}
     }
 }
 
 async function playStrobe() {
-    if (isPlaying) return;
+    if (isPlaying) {return;}
     isPlaying = true;
     abortController = new AbortController();
     const btn = document.getElementById("main-playback-btn");
@@ -2753,15 +2756,15 @@ async function playStrobe() {
     document.getElementById("playback-icon").src = "/assets/stop.svg";
     try {
         while (isPlaying) {
-            if (config.patterns.length === 0) break;
-            let indices =
+            if (config.patterns.length === 0) {break;}
+            const indices =
                 soloGroupIdx !== null &&
                 config.patterns[soloGroupIdx]?.type === "group"
                     ? [soloGroupIdx]
                     : config.patterns.map((_, i) => i);
-            for (let gIdx of indices) {
-                let item = config.patterns[gIdx];
-                if (!item || !isPlaying) continue;
+            for (const gIdx of indices) {
+                const item = config.patterns[gIdx];
+                if (!item || !isPlaying) {continue;}
                 if (item.type === "group") {
                     for (let r = 0; r < item.repeat; r++) {
                         for (
@@ -2769,7 +2772,7 @@ async function playStrobe() {
                             pIdx < item.patterns.length;
                             pIdx++
                         ) {
-                            if (!isPlaying) break;
+                            if (!isPlaying) {break;}
                             await playSinglePattern(
                                 item.patterns[pIdx],
                                 `${gIdx}-${pIdx}`,
@@ -2789,7 +2792,7 @@ async function playStrobe() {
                                     !isPlaying ||
                                     (pIdx === 0 && r < item.repeat - 1)
                                 )
-                                    continue;
+                                    {continue;}
                                 await playSinglePattern(
                                     item.patterns[pIdx],
                                     `${gIdx}-${pIdx}`,
@@ -2797,7 +2800,7 @@ async function playStrobe() {
                             }
                         }
                     }
-                } else await playSinglePattern(item, `${gIdx}`);
+                } else {await playSinglePattern(item, `${gIdx}`);}
             }
         }
     } catch (e) {}
@@ -2805,7 +2808,7 @@ async function playStrobe() {
 
 async function playSinglePattern(p, path) {
     highlightPlayingRow(path);
-    if (!p.phases) p = migratePattern(p);
+    if (!p.phases) {p = migratePattern(p);}
     let timePlayed = false;
     const bgDimEnabled = p.backgroundDim || false;
 
@@ -2820,10 +2823,10 @@ async function playSinglePattern(p, path) {
     }
 
     if (p.phases.anim.type === "flicker" && p.phases.anim.amount > 0) {
-        let animDur = p.phases.anim.duration > 0 ? p.phases.anim.duration : 500;
+        const animDur = p.phases.anim.duration > 0 ? p.phases.anim.duration : 500;
         const step = animDur / (p.phases.anim.amount * 2);
         for (let f = 0; f < p.phases.anim.amount * 2; f++) {
-            if (!isPlaying) break;
+            if (!isPlaying) {break;}
             renderLights(
                 f % 2 === 0
                     ? p.state
@@ -2853,7 +2856,7 @@ async function playSinglePattern(p, path) {
         await sleep(p.phases.out.duration, abortController.signal);
         timePlayed = true;
     }
-    if (!timePlayed) await sleep(10, abortController.signal);
+    if (!timePlayed) {await sleep(10, abortController.signal);}
 }
 
 function stopStrobe() {
@@ -2881,34 +2884,34 @@ function stopStrobe() {
 // ==========================================================================
 function deletePaths(pathsArray) {
     pathsArray.sort((a, b) => {
-        let [aG, aP] = a.split("-").map(Number);
-        let [bG, bP] = b.split("-").map(Number);
-        if (aG !== bG) return bG - aG;
+        const [aG, aP] = a.split("-").map(Number);
+        const [bG, bP] = b.split("-").map(Number);
+        if (aG !== bG) {return bG - aG;}
         return aP !== undefined && bP !== undefined ? bP - aP : 0;
     });
     pathsArray.forEach((path) => {
-        let [gIdx, pIdx] = path.split("-");
-        if (pIdx === undefined) config.patterns.splice(Number(gIdx), 1);
-        else config.patterns[Number(gIdx)].patterns.splice(Number(pIdx), 1);
+        const [gIdx, pIdx] = path.split("-");
+        if (pIdx === undefined) {config.patterns.splice(Number(gIdx), 1);}
+        else {config.patterns[Number(gIdx)].patterns.splice(Number(pIdx), 1);}
     });
     config.patterns = config.patterns.filter(
         (p) => p.type !== "group" || p.patterns.length > 0,
     );
 }
 function reverseSelectedOrder() {
-    if (selectedPaths.size < 2) return;
+    if (selectedPaths.size < 2) {return;}
     const groups = {};
     selectedPaths.forEach((path) => {
         const parts = path.split("-");
         const key = parts.length > 1 ? `group-${parts[0]}` : "root";
-        if (!groups[key]) groups[key] = [];
+        if (!groups[key]) {groups[key] = [];}
         groups[key].push(path);
     });
     Object.keys(groups).forEach((key) => {
         const paths = groups[key].sort(
             (a, b) => getIdxByPath(a) - getIdxByPath(b),
         );
-        if (paths.length < 2) return;
+        if (paths.length < 2) {return;}
         const parentArr = getArrByPath(paths[0]);
         const indices = paths.map((p) => getIdxByPath(p));
         const items = indices.map((idx) => parentArr[idx]);
@@ -2929,19 +2932,19 @@ function mirrorSelected() {
     showToast("Mirrored selection");
 }
 function duplicateSelected() {
-    if (selectedPaths.size === 0) return;
-    let roots = {};
+    if (selectedPaths.size === 0) {return;}
+    const roots = {};
     selectedPaths.forEach((p) => {
-        let r = p.split("-")[0];
-        if (!roots[r]) roots[r] = [];
+        const r = p.split("-")[0];
+        if (!roots[r]) {roots[r] = [];}
         roots[r].push(p);
     });
-    let sorted = Object.keys(roots)
+    const sorted = Object.keys(roots)
         .map(Number)
         .sort((a, b) => a - b);
-    let clones = [];
+    const clones = [];
     sorted.forEach((idx) => {
-        let item = config.patterns[idx];
+        const item = config.patterns[idx];
         if (
             item.type === "group" &&
             !item.patterns.every((_, pIdx) =>
@@ -2950,9 +2953,9 @@ function duplicateSelected() {
         ) {
             item.patterns.forEach((c, pIdx) => {
                 if (selectedPaths.has(`${idx}-${pIdx}`))
-                    clones.push(JSON.parse(JSON.stringify(c)));
+                    {clones.push(JSON.parse(JSON.stringify(c)));}
             });
-        } else clones.push(JSON.parse(JSON.stringify(item)));
+        } else {clones.push(JSON.parse(JSON.stringify(item)));}
     });
     config.patterns.splice(sorted[sorted.length - 1] + 1, 0, ...clones);
     selectedPaths.clear();
@@ -2965,11 +2968,11 @@ function duplicateSelected() {
 // Add / duplicate / invert / remove individual rows and groups.
 // ==========================================================================
 function deleteSelected() {
-    if (selectedPaths.size === 0) return;
+    if (selectedPaths.size === 0) {return;}
     const count = selectedPaths.size;
     const sortedPaths = Array.from(selectedPaths).sort((a, b) => {
-        let [aG, aP] = a.split("-").map(Number);
-        let [bG, bP] = b.split("-").map(Number);
+        const [aG, aP] = a.split("-").map(Number);
+        const [bG, bP] = b.split("-").map(Number);
         return aG === bG ? (aP || 0) - (bP || 0) : aG - bG;
     });
     const lastPath = sortedPaths[sortedPaths.length - 1];
@@ -2994,7 +2997,7 @@ function deleteSelected() {
                 newRows[Math.min(lastIdx, newRows.length - 1)].dataset
                     .groupPath,
         );
-    } else renderInspector();
+    } else {renderInspector();}
     showToast(`Deleted ${count} items`);
 }
 
@@ -3011,7 +3014,7 @@ function invertGroup(gIdx) {
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
     config.patterns[gIdx].patterns.forEach((p) => {
         p.state = p.state.map((s) => {
-            let val = Math.round(parseFloat(s) || 0);
+            const val = Math.round(parseFloat(s) || 0);
             return max - val;
         });
     });
@@ -3034,20 +3037,20 @@ function addPattern() {
 }
 
 function duplicateRow(path) {
-    let arr = getArrByPath(path);
-    let idx = getIdxByPath(path);
+    const arr = getArrByPath(path);
+    const idx = getIdxByPath(path);
     arr.splice(idx + 1, 0, JSON.parse(JSON.stringify(arr[idx])));
     renderTable();
 }
 
 function invertRow(path, render = true) {
     const max = config.properties.pwm.max || DEFAULT_PWM_MAX;
-    let p = getObjByPath(path);
+    const p = getObjByPath(path);
     p.state = p.state.map((s) => {
-        let val = Math.round(parseFloat(s) || 0);
+        const val = Math.round(parseFloat(s) || 0);
         return max - val;
     });
-    if (render) renderTable();
+    if (render) {renderTable();}
 }
 
 function removePattern(path) {
@@ -3060,9 +3063,9 @@ function removePattern(path) {
     if (!path.includes("-")) {
         const idx = parseInt(path);
         config.patterns.splice(idx, 1);
-        if (soloGroupIdx === idx) soloGroupIdx = null;
-        else if (soloGroupIdx > idx) soloGroupIdx--;
-    } else deletePaths([path]);
+        if (soloGroupIdx === idx) {soloGroupIdx = null;}
+        else if (soloGroupIdx > idx) {soloGroupIdx--;}
+    } else {deletePaths([path]);}
     activePath = null;
     inspectorBuffer = null;
     dirtyFields.clear();
@@ -3076,7 +3079,7 @@ function removePattern(path) {
                 newRows[Math.min(currentIdx, newRows.length - 1)].dataset
                     .groupPath,
         );
-    } else renderInspector();
+    } else {renderInspector();}
     showToast("Item deleted");
 }
 
@@ -3098,18 +3101,18 @@ function clearAllPatterns() {
 // Shifting a row's channel values left/right, or mirroring them.
 // ==========================================================================
 function shiftPattern(path, dir, render = true) {
-    let p = getObjByPath(path);
-    if (!p || p.type === "group") return;
+    const p = getObjByPath(path);
+    if (!p || p.type === "group") {return;}
     dir === "left"
         ? p.state.push(p.state.shift())
         : p.state.unshift(p.state.pop());
-    if (render) renderTable();
+    if (render) {renderTable();}
     updateJsonPanel();
 }
 function mirrorPattern(path, render = true) {
-    let p = getObjByPath(path);
+    const p = getObjByPath(path);
     p.state.reverse();
-    if (render) renderTable();
+    if (render) {renderTable();}
     updateJsonPanel();
 }
 
@@ -3123,7 +3126,7 @@ function handleDrop(target, dragged) {
     if (!isTChild && !isDChild) {
         const tIdx = parseInt(target),
             dIdx = parseInt(dragged);
-        let indicesToMove = selectedPaths.has(dragged)
+        const indicesToMove = selectedPaths.has(dragged)
             ? Array.from(selectedPaths)
                   .filter((p) => !p.includes("-"))
                   .map(Number)
@@ -3133,7 +3136,7 @@ function handleDrop(target, dragged) {
         for (let i = indicesToMove.length - 1; i >= 0; i--) {
             config.patterns.splice(indicesToMove[i], 1);
         }
-        let insertIdx = tIdx - indicesToMove.filter((idx) => idx < tIdx).length;
+        const insertIdx = tIdx - indicesToMove.filter((idx) => idx < tIdx).length;
         config.patterns.splice(insertIdx, 0, ...items);
         const newSelection = new Set();
         for (let i = 0; i < items.length; i++) {
@@ -3143,11 +3146,11 @@ function handleDrop(target, dragged) {
     } else if (isTChild && isDChild) {
         const tG = target.split("-")[0],
             dG = dragged.split("-")[0];
-        if (tG !== dG) return;
+        if (tG !== dG) {return;}
         const gIdx = parseInt(tG),
             tIdx = parseInt(target.split("-")[1]),
             dIdx = parseInt(dragged.split("-")[1]);
-        let childIndices = selectedPaths.has(dragged)
+        const childIndices = selectedPaths.has(dragged)
             ? Array.from(selectedPaths)
                   .filter((p) => p.startsWith(tG + "-"))
                   .map((p) => parseInt(p.split("-")[1]))
@@ -3159,7 +3162,7 @@ function handleDrop(target, dragged) {
         for (let i = childIndices.length - 1; i >= 0; i--) {
             config.patterns[gIdx].patterns.splice(childIndices[i], 1);
         }
-        let insertIdx = tIdx - childIndices.filter((idx) => idx < tIdx).length;
+        const insertIdx = tIdx - childIndices.filter((idx) => idx < tIdx).length;
         config.patterns[gIdx].patterns.splice(insertIdx, 0, ...children);
         const newSelection = new Set();
         for (let i = 0; i < children.length; i++) {
@@ -3200,7 +3203,7 @@ function updateJsonPanel() {
         !isUndoRedoAction &&
         (historyIndex === -1 || currentJson !== historyStack[historyIndex])
     )
-        saveState(currentJson);
+        {saveState(currentJson);}
     updateUndoRedoButtons();
 }
 
@@ -3213,7 +3216,7 @@ function getJsonErrorLine(text, position) {
 
 function showJsonValid() {
     const bar = document.getElementById("json-status-bar");
-    if (!bar) return;
+    if (!bar) {return;}
     bar.classList.remove("status-error");
     bar.classList.add("status-valid");
     bar.innerHTML = `<img src="/assets/valid.svg" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"> Valid JSON`;
@@ -3221,7 +3224,7 @@ function showJsonValid() {
 
 function showJsonError(err) {
     const bar = document.getElementById("json-status-bar");
-    if (!bar) return;
+    if (!bar) {return;}
     bar.classList.remove("status-valid");
     bar.classList.add("status-error");
     let message = err && err.message ? err.message : "Invalid JSON";
@@ -3261,7 +3264,7 @@ function handleManualJsonEdit(val) {
         ensureConfigDefaults(); // migrates colors & properties
         syncPinsMappingLength();
         config = migrateConfigToPWM(config);
-        if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+        if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
         syncCanvasLayoutLength();
         document.getElementById("light-bar").innerHTML = "";
         document.getElementById("custom-layout-view").innerHTML = "";
@@ -3303,7 +3306,7 @@ const sleep = (ms, sig) =>
 // dragged to arbitrary positions on a canvas.
 // ==========================================================================
 function loadCanvasLayoutData() {
-    let data = localStorage.getItem(`strobe_canvas_layout_v${version}`);
+    const data = localStorage.getItem(`strobe_canvas_layout_v${version}`);
     if (data) {
         try {
             canvasLayoutData = JSON.parse(data);
@@ -3318,9 +3321,9 @@ function loadCanvasLayoutData() {
 
 function syncCanvasLayoutLength() {
     while (canvasLayoutData.length < config.channels) {
-        let i = canvasLayoutData.length;
-        let row = Math.floor(i / 5);
-        let col = i % 5;
+        const i = canvasLayoutData.length;
+        const row = Math.floor(i / 5);
+        const col = i % 5;
         canvasLayoutData.push({
             x: 15 + col * 16,
             y: 25 + row * 40,
@@ -3371,7 +3374,7 @@ function setPreviewMode(mode) {
     }
 
     if (activePath) {
-        let currP = getObjByPath(activePath);
+        const currP = getObjByPath(activePath);
         if (currP && currP.state) {
             const bgDim = getBackgroundDimForPath(activePath);
             renderLights(currP.state, 0, bgDim);
@@ -3435,7 +3438,7 @@ function handleCanvasNodeMouseDown(e, index) {
     const rect = container.getBoundingClientRect();
 
     function onMouseMove(moveEvent) {
-        if (draggedChannelIdx === null) return;
+        if (draggedChannelIdx === null) {return;}
         let relX = ((moveEvent.clientX - rect.left) / rect.width) * 100;
         let relY = ((moveEvent.clientY - rect.top) / rect.height) * 100;
 
@@ -3467,7 +3470,7 @@ function handleCanvasNodeMouseDown(e, index) {
 }
 
 function resetIndicatorPositions() {
-    if (!confirm("Reset position of all indicators?")) return;
+    if (!confirm("Reset position of all indicators?")) {return;}
     const cols = Math.ceil(config.channels / 2);
     const topY = 25;
     const bottomY = 65;
@@ -3507,7 +3510,7 @@ function resetIndicatorPositions() {
 function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
     const bar = document.getElementById("light-bar");
     const customView = document.getElementById("custom-layout-view");
-    if (!bar || !customView) return;
+    if (!bar || !customView) {return;}
 
     // Compute output state with background dimming
     const bgPWM = config.properties.backgroundDim.pwm || 0;
@@ -3518,6 +3521,9 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
         }
         return num;
     });
+
+    // Track current light state for canvas reset during playback
+    currentLightState = outputState;
 
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
@@ -3582,10 +3588,10 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 
     Array.from(bar.children).forEach((container, i) => {
         const l = container.querySelector(".light");
-        if (!l) return;
+        if (!l) {return;}
         if (transitionMs > 0)
-            l.style.transition = `all ${transitionMs}ms ease-in-out`;
-        else l.style.transition = `all 0.05s`;
+            {l.style.transition = `all ${transitionMs}ms ease-in-out`;}
+        else {l.style.transition = `all 0.05s`;}
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
         const opacity = getChannelOpacity(val);
@@ -3607,7 +3613,7 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
 
     Array.from(customView.children).forEach((el, i) => {
         const layout = canvasLayoutData[i];
-        if (!layout) return;
+        if (!layout) {return;}
 
         el.className = `canvas-light-node shape-${layout.shape}`;
         if (i === activeInspectorChannel && previewMode === "custom") {
@@ -3618,8 +3624,8 @@ function renderLights(state, transitionMs = 0, bgDimEnabled = false) {
         el.style.top = `${layout.y}%`;
 
         if (transitionMs > 0)
-            el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;
-        else el.style.transition = `all 0.05s, left 0s, top 0s`;
+            {el.style.transition = `all ${transitionMs}ms ease-in-out, left 0s, top 0s`;}
+        else {el.style.transition = `all 0.05s, left 0s, top 0s`;}
 
         const val = parseFloat(outputState[i]) || 0;
         const isOn = isChannelOn(val);
@@ -3676,7 +3682,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     ensureConfigDefaults(); // migrates colors
     config = migrateConfigToPWM(config);
-    if (!config._strobe_editor_version) config._strobe_editor_version = "1";
+    if (!config._strobe_editor_version) {config._strobe_editor_version = "1";}
     // ensure indicatorColors are correct
     if (
         !config.properties.indicator.channelColors ||
@@ -3832,7 +3838,7 @@ function getOrderedConfig() {
     const result = {};
     // Add known keys in the desired order
     for (const key of orderedKeys) {
-        if (key in cfg) result[key] = cfg[key];
+        if (key in cfg) {result[key] = cfg[key];}
     }
     // Append any remaining keys that were not explicitly ordered
     for (const key of Object.keys(cfg)) {
@@ -3934,12 +3940,12 @@ function closeAllModals() {
     ];
     modalIds.forEach((id) => {
         const el = document.getElementById(id);
-        if (el) el.style.display = "none";
+        if (el) {el.style.display = "none";}
     });
 }
 
 function syncPinsMappingLength() {
-    if (!config.properties) config.properties = {};
+    if (!config.properties) {config.properties = {};}
     if (!Array.isArray(config.properties.pinsMapping)) {
         config.properties.pinsMapping = [];
     }
@@ -3970,7 +3976,7 @@ function updateIpAddress(value) {
 }
 function renderPinsMappingUI() {
     const container = document.getElementById("pins-mapping-container");
-    if (!container) return;
+    if (!container) {return;}
     const pins = config.properties.pinsMapping || [];
     let html = "";
     for (let i = 0; i < config.channels; i++) {
