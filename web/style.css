@@ -75,9 +75,45 @@ input[type="number"] {
     font-family: inherit;
 }
 
-input:focus {
-    border-color: var(--accent);
-    background: #252525;
+input:focus,
+button:focus,
+select:focus,
+[role="button"]:focus,
+[role="switch"]:focus,
+[role="separator"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+input:focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+[role="switch"]:focus:not(:focus-visible),
+[role="separator"]:focus:not(:focus-visible) {
+    outline: none;
+}
+
+input:focus-visible,
+button:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="separator"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+/* High contrast focus for interactive elements */
+.btn-compact:focus-visible,
+.play-btn:focus-visible,
+.action-btn:focus-visible,
+.modal-close-btn:focus-visible,
+.inspector-select:focus-visible,
+.toolbar-group button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    z-index: 10;
 }
 
 .icon {

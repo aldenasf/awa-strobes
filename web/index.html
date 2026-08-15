@@ -34,10 +34,10 @@
         </label>
     </div>
 
-    <div id="help-modal" onclick="toggleHelp()">
+    <div id="help-modal" onclick="toggleHelp()" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 style="margin:0; color:var(--accent); font-size:18px;">Keyboard Shortcuts Guide</h3>
+                <h3 id="help-modal-title" style="margin:0; color:var(--accent); font-size:18px;">Keyboard Shortcuts Guide</h3>
                 <button class="modal-close-btn" onclick="toggleHelp()">
                     <img src="/assets/close.svg" class="icon" style="width:16px;height:16px;">
                 </button>
@@ -108,10 +108,10 @@
         </div>
     </div>
 
-    <div id="preferences-modal" onclick="togglePreferencesModal()">
+    <div id="preferences-modal" onclick="togglePreferencesModal()" role="dialog" aria-modal="true" aria-labelledby="preferences-modal-title">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3
+                <h3 id="preferences-modal-title"
                     style="margin:0; color:var(--accent); font-size:18px; text-transform:uppercase; letter-spacing:0.5px;">
                     Preferences</h3>
                 <button class="modal-close-btn" onclick="togglePreferencesModal()">
@@ -160,10 +160,10 @@
         </div>
     </div>
 
-    <div id="project-settings-modal" onclick="toggleProjectSettingsModal()">
+    <div id="project-settings-modal" onclick="toggleProjectSettingsModal()" role="dialog" aria-modal="true" aria-labelledby="project-settings-modal-title">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3
+                <h3 id="project-settings-modal-title"
                     style="margin:0; color:var(--accent); font-size:18px; text-transform:uppercase; letter-spacing:0.5px;">
                     Project Settings</h3>
                 <button class="modal-close-btn" onclick="toggleProjectSettingsModal()">
@@ -327,26 +327,26 @@
         <div style="padding: 0 20px;">
             <div class="toolbar-container">
                 <div class="toolbar">
-                    <div class="toolbar-group">
+                    <div class="toolbar-group" role="group" aria-label="Editor mode">
                         <button id="btn-edit-mode" title="Edit Mode (E)" class="active-mode"
-                            onclick="setAppMode('edit')"><u>E</u>DIT</button>
+                            onclick="setAppMode('edit')" aria-pressed="true" role="switch"><u>E</u>DIT</button>
                         <button id="btn-select-mode" title="Select Mode (S)"
-                            onclick="setAppMode('select')"><u>S</u>ELECT</button>
+                            onclick="setAppMode('select')" aria-pressed="false" role="switch"><u>S</u>ELECT</button>
                     </div>
                     <div class="toolbar-group">
-                        <span class="label-text">CH</span>
-                        <input type="number" id="global-channels" value="10"
-                            onchange="updateGlobalChannels(this.value)">
+                        <label for="global-channels" class="label-text">CH</label>
+                        <input type="number" id="global-channels" value="10" min="1" max="20"
+                            onchange="updateGlobalChannels(this.value)" aria-label="Number of channels">
                     </div>
 
-                    <div class="toolbar-group">
+                    <div class="toolbar-group" role="group" aria-label="Paint tool">
                         <!-- <span class="label-text">TOOL</span> -->
                         <button id="tool-hybrid-btn" class="btn-compact active-hybrid" onclick="setActiveTool('hybrid')"
-                            title="Hybrid Inverse Drag Mode"><img src="/assets/hybrid.svg" class="icon"></button>
+                            title="Hybrid Inverse Drag Mode" aria-pressed="true" role="button"><img src="/assets/hybrid.svg" class="icon"></button>
                         <button id="tool-paint-btn" class="btn-compact" onclick="setActiveTool('paint')"
-                            title="Paint Brush Tool"><img src="/assets/brush.svg" class="icon"></button>
+                            title="Paint Brush Tool" aria-pressed="false" role="button"><img src="/assets/brush.svg" class="icon"></button>
                         <button id="tool-erase-btn" class="btn-compact" onclick="setActiveTool('erase')"
-                            title="Eraser Tool"><img src="/assets/eraser.svg" class="icon"></button>
+                            title="Eraser Tool" aria-pressed="false" role="button"><img src="/assets/eraser.svg" class="icon"></button>
                     </div>
 
                     <div class="toolbar-group" id="brush-intensity-group">
@@ -367,16 +367,16 @@
 
                     <div class="toolbar-group">
                         <button id="main-playback-btn" class="play-btn" title="Toggle Playback (Space)"
-                            onclick="togglePlayback()">
+                            onclick="togglePlayback()" aria-pressed="false" aria-label="Playback">
                             <img src="/assets/play.svg" class="icon" id="playback-icon"
                                 onerror="this.style.display='none'"> <span id="playback-text">PLAY</span>
                         </button>
                     </div>
                     <div class="toolbar-group">
                         <button id="btn-undo" class="btn-compact" title="Undo (Ctrl+Z)" onclick="undoState()"
-                            disabled><img src="/assets/undo.svg" class="icon"></button>
+                            disabled aria-label="Undo"><img src="/assets/undo.svg" class="icon"></button>
                         <button id="btn-redo" class="btn-compact" title="Redo (Ctrl+Y)" onclick="redoState()"
-                            disabled><img src="/assets/redo.svg" class="icon"></button>
+                            disabled aria-label="Redo"><img src="/assets/redo.svg" class="icon"></button>
                     </div>
                     <div style="flex-grow: 1"></div>
 
@@ -385,48 +385,48 @@
                         <span id="ws-status" style="color:red; font-size:16px; line-height: 1;">⬤</span> SYNC
                     </div>
 
-                    <button title="Raw Config" onclick="toggleJsonModal()"><img src="/assets/code.svg"
+                    <button title="Raw Config" onclick="toggleJsonModal()" aria-label="Open JSON editor"><img src="/assets/code.svg"
                             class="icon"></button>
-                    <button title="Project Settings" onclick="toggleProjectSettingsModal()"><img
+                    <button title="Project Settings" onclick="toggleProjectSettingsModal()" aria-label="Project settings"><img
                             src="/assets/settings.svg" class="icon"></button>
-                    <button title="Preferences" onclick="togglePreferencesModal()"><img src="/assets/preferences.svg"
+                    <button title="Preferences" onclick="togglePreferencesModal()" aria-label="Preferences"><img src="/assets/preferences.svg"
                             class="icon"></button>
-                    <button onclick="addPattern()" title="Add Row (A)"><img src="/assets/plus.svg" class="icon">
+                    <button onclick="addPattern()" title="Add Row (A)" aria-label="Add pattern"><img src="/assets/plus.svg" class="icon">
                     </button>
-                    <button class="warn" onclick="clearAllPatterns()"><img src="/assets/delete.svg" class="icon">
+                    <button class="warn" onclick="clearAllPatterns()" aria-label="Clear all patterns"><img src="/assets/delete.svg" class="icon">
                     </button>
                 </div>
 
-                <div class="toolbar selection-toolbar" id="selection-toolbar">
-                    <div class="toolbar-group">
-                        <button id="sel-all" onclick="selectAllRows()">ALL</button>
-                        <button id="sel-clear" onclick="clearSelection()" style="background: #444;">NONE</button>
+                <div class="toolbar selection-toolbar" id="selection-toolbar" role="toolbar" aria-label="Selection tools">
+                    <div class="toolbar-group" role="group" aria-label="Select rows">
+                        <button id="sel-all" onclick="selectAllRows()" aria-label="Select all rows">ALL</button>
+                        <button id="sel-clear" onclick="clearSelection()" style="background: #444;" aria-label="Clear selection">NONE</button>
                         <button id="sel-odd" onclick="filterSelectionOddEven('odd')"
-                            style="background: #2a2a2a; border: 1px solid #555;">ODD</button>
+                            style="background: #2a2a2a; border: 1px solid #555;" aria-label="Select odd rows">ODD</button>
                         <button id="sel-even" onclick="filterSelectionOddEven('even')"
-                            style="background: #2a2a2a; border: 1px solid #555;">EVEN</button>
+                            style="background: #2a2a2a; border: 1px solid #555;" aria-label="Select even rows">EVEN</button>
                         <button id="sel-undo" onclick="undoSelection()" style="background: #3a2d42; color: #dcb3ff;"
-                            disabled>UNDO SEL</button>
+                            disabled aria-label="Undo selection">UNDO SEL</button>
                     </div>
                     <div class="toolbar-group">
-                        <button id="sel-group" onclick="groupSelectedItems()" style="color:var(--accent)">GROUP</button>
+                        <button id="sel-group" onclick="groupSelectedItems()" style="color:var(--accent)" aria-label="Group selected patterns">GROUP</button>
                     </div>
-                    <div class="toolbar-group">
+                    <div class="toolbar-group" role="group" aria-label="Selection actions">
                         <button id="sel-clone" class="btn-compact" title="Clone Selection (Ctrl+D)"
-                            onclick="duplicateSelected()"><img src="/assets/duplicate.svg" class="icon"></button>
+                            onclick="duplicateSelected()" aria-label="Duplicate selected"><img src="/assets/duplicate.svg" class="icon"></button>
                         <button id="sel-reverse" class="btn-compact" title="Reverse Play Order (Ctrl+R)"
-                            onclick="reverseSelectedOrder()"><img src="/assets/reverse-order.svg" class="icon"></button>
-                        <button id="sel-invert" class="btn-compact" onclick="invertSelected()"><img
+                            onclick="reverseSelectedOrder()" aria-label="Reverse order"><img src="/assets/reverse-order.svg" class="icon"></button>
+                        <button id="sel-invert" class="btn-compact" onclick="invertSelected()" aria-label="Invert"><img
                                 src="/assets/invert.svg" class="icon"></button>
-                        <button id="sel-mirror" class="btn-compact" onclick="mirrorSelected()"><img
+                        <button id="sel-mirror" class="btn-compact" onclick="mirrorSelected()" aria-label="Mirror"><img
                                 src="/assets/mirror.svg" class="icon"></button>
-                        <button id="sel-left" class="btn-compact" onclick="shiftSelected('left')"><img
+                        <button id="sel-left" class="btn-compact" onclick="shiftSelected('left')" aria-label="Shift left"><img
                                 src="/assets/shift-left.svg" class="icon"></button>
-                        <button id="sel-right" class="btn-compact" onclick="shiftSelected('right')"><img
+                        <button id="sel-right" class="btn-compact" onclick="shiftSelected('right')" aria-label="Shift right"><img
                                 src="/assets/shift-right.svg" class="icon"></button>
                     </div>
                     <div style="flex-grow: 1"></div>
-                    <button id="sel-delete" class="warn" onclick="deleteSelected()"><img src="/assets/delete.svg"
+                    <button id="sel-delete" class="warn" onclick="deleteSelected()" aria-label="Delete selected"><img src="/assets/delete.svg"
                             class="icon"> <span id="del-count-text"></span></button>
                 </div>
             </div>
@@ -435,24 +435,24 @@
 
     <div class="app-container" onclick="handleEmptyClick(event)">
         <div class="editor-side show-steps" id="editor-container" onclick="handleEmptyClick(event)">
-            <table id="main-table">
+            <table id="main-table" role="grid" aria-label="Pattern list">
                 <thead>
-                    <tr>
-                        <th style="width: 35px;"></th>
-                        <th style="width: auto;">State Configuration</th>
-                        <th style="width: 160px;">Timeline Summary</th>
-                        <th style="width: 220px;">Actions</th>
+                    <tr role="row">
+                        <th style="width: 35px;" scope="col" aria-label="Row number"></th>
+                        <th style="width: auto;" scope="col">State Configuration</th>
+                        <th style="width: 160px;" scope="col">Timeline Summary</th>
+                        <th style="width: 220px;" scope="col">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="pattern-list"></tbody>
+                <tbody id="pattern-list" role="rowgroup"></tbody>
             </table>
         </div>
 
-        <div class="v-resizer" id="v-resizer" title="Drag to resize / Double-click to reset"></div>
+        <div class="v-resizer" id="v-resizer" title="Drag to resize / Double-click to reset" role="separator" aria-orientation="vertical" aria-label="Resize editor panel" tabindex="0"></div>
 
-        <div id="inspector-panel" onclick="event.stopPropagation()">
-            <h3 style="margin:0 0 15px 0; color:var(--text); font-size: 14px; text-transform:uppercase;">Inspector</h3>
-            <div id="inspector-content">
+        <div id="inspector-panel" onclick="event.stopPropagation()" role="region" aria-label="Inspector panel">
+            <h3 id="inspector-title" style="margin:0 0 15px 0; color:var(--text); font-size: 14px; text-transform:uppercase;">Inspector</h3>
+            <div id="inspector-content" aria-live="polite">
                 <p style="color:#555; font-size: 12px;">Select a pattern to edit...</p>
             </div>
         </div>
